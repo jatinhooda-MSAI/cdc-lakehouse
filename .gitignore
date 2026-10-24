@@ -1,0 +1,6 @@
+.state/
+flink/job/target/
+flink/job.args
+__pycache__/
+*.pyc
+.DS_Store

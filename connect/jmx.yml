@@ -1,0 +1,17 @@
+lowercaseOutputName: true
+rules:
+  - pattern: "debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^,>]+)(?:, [^>]*)?><>([A-Za-z]+)"
+    name: debezium_$1_$4
+    labels:
+      context: $2
+      server: $3
+  - pattern: "kafka.connect<type=source-task-metrics, connector=([^,]+), task=([^>]+)><>([a-z-]+)"
+    name: kafka_connect_source_task_$3
+    labels:
+      connector: $1
+      task: $2
+  - pattern: "kafka.connect<type=task-error-metrics, connector=([^,]+), task=([^>]+)><>([a-z-]+)"
+    name: kafka_connect_task_error_$3
+    labels:
+      connector: $1
+      task: $2

@@ -1,0 +1,9 @@
+psycopg[binary]==3.3.8
+trino==0.340.0
+confluent-kafka==2.16.1
+docker==7.2.0
+boto3==1.43.125
+requests==2.34.2
+pyiceberg==0.12.0
+prometheus-client==0.26.0
+matplotlib==3.11.2

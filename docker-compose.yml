@@ -1,0 +1,303 @@
+name: cdc
+
+x-aws: &aws
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: minio
+  AWS_SECRET_ACCESS_KEY: minio12345
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+
+x-flink-env: &flink-env
+  <<: *aws
+  FLINK_PROPERTIES: |
+    jobmanager.rpc.address: jobmanager
+    jobmanager.memory.process.size: 768m
+    taskmanager.memory.process.size: 1600m
+    taskmanager.numberOfTaskSlots: 4
+    parallelism.default: 2
+    state.backend.type: rocksdb
+    state.backend.incremental: true
+    state.checkpoints.dir: s3://flink/checkpoints
+    state.savepoints.dir: s3://flink/savepoints
+    state.checkpoints.num-retained: 3
+    execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+    execution.checkpointing.timeout: 2min
+    execution.checkpointing.tolerable-failed-checkpoints: 5
+    execution.checkpointing.min-pause: 5s
+    restart-strategy.type: exponential-delay
+    restart-strategy.exponential-delay.initial-backoff: 2s
+    restart-strategy.exponential-delay.max-backoff: 30s
+    heartbeat.interval: 3000
+    heartbeat.timeout: 15000
+    s3.endpoint: http://minio:9000
+    s3.path.style.access: true
+    s3.access-key: minio
+    s3.secret-key: minio12345
+    metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+    metrics.reporter.prom.port: 9249
+    classloader.check-leaked-classloader: false
+
+x-tools: &tools
+  build: ./tools
+  image: cdc-tools:latest
+  volumes:
+    - ./:/app
+  environment:
+    <<: *aws
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16.15
+    command: >
+      postgres -c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10
+      -c max_slot_wal_keep_size=4GB -c track_commit_timestamp=on -c shared_buffers=128MB
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shop
+    ports: ["15432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      interval: 5s
+      retries: 30
+    mem_limit: 320m
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:4.2.2
+    environment:
+      CLUSTER_ID: cdc-lakehouse-kraft-01
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx256m
+    ports: ["29092:29092"]
+    volumes:
+      - kafka:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/9092'"]
+      interval: 5s
+      retries: 30
+    mem_limit: 512m
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.2.4
+    depends_on:
+      kafka: {condition: service_healthy}
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_HEAP_OPTS: -Xms128m -Xmx192m
+    ports: ["8085:8081"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:8081/subjects"]
+      interval: 5s
+      retries: 30
+    mem_limit: 320m
+    restart: unless-stopped
+
+  connect:
+    build: ./connect
+    image: cdc-connect:3.7.0
+    depends_on:
+      kafka: {condition: service_healthy}
+      schema-registry: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_GROUP_ID: connect-cluster
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 15000
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx448m
+      KAFKA_OPTS: -javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=9404:/opt/jmx/jmx.yml
+    ports: ["8083:8083"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:8083/connector-plugins | grep -q PostgresConnector"]
+      interval: 5s
+      retries: 60
+    mem_limit: 768m
+
+  minio:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+      MINIO_DEFAULT_BUCKETS: warehouse,flink
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - minio:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:9000/minio/health/live"]
+      interval: 5s
+      retries: 30
+    mem_limit: 256m
+
+  iceberg-rest:
+    build: ./catalog
+    image: cdc-iceberg-rest:1.10.1
+    depends_on:
+      postgres: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    environment:
+      <<: *aws
+      CATALOG_URI: jdbc:postgresql://postgres:5432/iceberg_catalog
+      CATALOG_JDBC_USER: iceberg
+      CATALOG_JDBC_PASSWORD: iceberg
+      CATALOG_WAREHOUSE: s3://warehouse/
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      CATALOG_S3_ACCESS__KEY__ID: minio
+      CATALOG_S3_SECRET__ACCESS__KEY: minio12345
+      CATALOG_CLIENT_REGION: us-east-1
+      JAVA_TOOL_OPTIONS: -Xmx192m
+    ports: ["8181:8181"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/8181'"]
+      interval: 5s
+      retries: 30
+    mem_limit: 320m
+    restart: unless-stopped
+
+  jobmanager:
+    build: ./flink
+    image: cdc-flink:1.20.5
+    command: jobmanager
+    depends_on:
+      minio: {condition: service_healthy}
+    environment: *flink-env
+    ports: ["8081:8081"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/8081'"]
+      interval: 5s
+      retries: 30
+    mem_limit: 896m
+
+  taskmanager:
+    image: cdc-flink:1.20.5
+    command: taskmanager
+    depends_on:
+      jobmanager: {condition: service_healthy}
+    environment: *flink-env
+    mem_limit: 1800m
+
+  trino:
+    image: trinodb/trino:484
+    depends_on:
+      iceberg-rest: {condition: service_healthy}
+    ports: ["18080:8080"]
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      interval: 5s
+      retries: 60
+    mem_limit: 1280m
+    restart: unless-stopped
+
+  controller:
+    <<: *tools
+    command: python -m controller.controller
+    depends_on:
+      connect: {condition: service_healthy}
+      iceberg-rest: {condition: service_healthy}
+      jobmanager: {condition: service_healthy}
+    ports: ["8001:8001"]
+    mem_limit: 160m
+
+  exporter:
+    <<: *tools
+    command: python -m observability.exporter
+    depends_on:
+      trino: {condition: service_healthy}
+    mem_limit: 160m
+
+  maintenance:
+    <<: *tools
+    command: python -m maintenance.maintain
+    depends_on:
+      trino: {condition: service_healthy}
+    mem_limit: 128m
+
+  tools:
+    <<: *tools
+    profiles: ["tools"]
+    restart: "no"
+    volumes:
+      - ./:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 512m
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command: --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.retention.time=7d
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus:/prometheus
+    ports: ["9090:9090"]
+    mem_limit: 256m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.4.12
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./observability/grafana:/etc/grafana/provisioning:ro
+    ports: ["3000:3000"]
+    mem_limit: 192m
+    restart: unless-stopped
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    command: --kafka.server=kafka:9092 --group.filter=cdc-lakehouse.*
+    depends_on:
+      kafka: {condition: service_healthy}
+    mem_limit: 64m
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:postgres@postgres:5432/shop?sslmode=disable
+    command: --collector.replication_slot
+    depends_on:
+      postgres: {condition: service_healthy}
+    mem_limit: 64m
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  kafka:
+  minio:
+  prometheus:
