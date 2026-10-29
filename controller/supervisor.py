@@ -99,6 +99,8 @@ def mark_halted(reason):
 
 
 def tick(halted, created):
+    if os.path.exists("/app/.state/supervisor-paused"):
+        return
     job = current()
     if created:
         state["last_change"] = time.time()

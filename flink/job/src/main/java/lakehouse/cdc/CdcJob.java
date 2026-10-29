@@ -45,6 +45,7 @@ public class CdcJob {
     int writers = p.getInt("write-parallelism", 2);
 
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    env.setParallelism(p.getInt("parallelism", 2));
     env.enableCheckpointing(p.getLong("checkpoint-ms", 30000), CheckpointingMode.EXACTLY_ONCE);
 
     Map<String, String> props = new HashMap<>();
