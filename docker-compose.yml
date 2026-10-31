@@ -36,6 +36,7 @@ x-flink-env: &flink-env
     metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
     metrics.reporter.prom.port: 9249
     classloader.check-leaked-classloader: false
+    rest.cache.checkpoint-statistics.timeout: 100 ms
 
 x-tools: &tools
   build: ./tools
@@ -111,7 +112,7 @@ services:
       test: ["CMD-SHELL", "curl -sf localhost:8081/subjects"]
       interval: 5s
       retries: 30
-    mem_limit: 320m
+    mem_limit: 448m
     restart: unless-stopped
 
   connect:
@@ -216,7 +217,7 @@ services:
     volumes:
       - ./trino/catalog:/etc/trino/catalog:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      test: ["CMD", "bash", "-c", "[[ $(curl -sf localhost:8080/v1/info) == *'\"starting\":false'* ]]"]
       interval: 5s
       retries: 60
     mem_limit: 1280m

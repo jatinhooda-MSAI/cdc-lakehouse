@@ -8,6 +8,7 @@ Non-goals:
 - Cross-table transactional reads. An order and its items are committed in one Postgres transaction but land in separate Iceberg commits, so a reader can briefly see one without the other. Final states agree; snapshots in between are per table.
 - TRUNCATE and primary key type changes. Both stop the pipeline (section 4).
 - Multi-region, auth, encryption. Credentials are plain env vars.
+- Kubernetes. The original plan had a Helm/Terraform phase. It was cut because it could not be run and checked next to the compose stack on one laptop. On Kubernetes, the Flink operator (last-state upgrades, Kubernetes HA) replaces the controller's job supervision.
 
 ## Architecture
 

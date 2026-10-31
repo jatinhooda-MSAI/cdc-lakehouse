@@ -93,7 +93,7 @@ class Workload:
         self.ledger.flush()
 
     def customer_row(self):
-        return (f"{uuid.UUID(int=self.rng.getrandbits(128))}@example.com",
+        return (f"{uuid.uuid4()}@example.com",
                 f"Customer {self.rng.randint(1, 10**6)}", self.rng.choice(COUNTRIES))
 
     def new_customer(self):
@@ -238,6 +238,7 @@ def bootstrap(args):
                             [list(c) for c in zip(*catalog)]).fetchall()
         for r in rows:
             ledger.add("products", "c", r)
+        conn.execute("INSERT INTO latency_probe DEFAULT VALUES")
         conn.commit()
     ledger.flush()
     w = Workload(rng, ledger)
@@ -275,12 +276,17 @@ def run(args):
     start = time.time()
     next_at = start
     next_big = start + args.big_txn_every if args.big_txn_every else None
-    done = 0
+    done = errors = 0
     while not stop.is_set() and (not args.duration or time.time() - start < args.duration):
         now = time.time()
         bursting = args.burst_every and (now - start) % args.burst_every < args.burst_len
-        w.step()
-        done += 1
+        try:
+            w.step()
+            done += 1
+        except Exception as e:
+            errors += 1
+            L.warning("op failed, rolled back: %s", str(e).splitlines()[0])
+            stop.wait(0.5)
         if next_big and now >= next_big:
             L.info("big transaction touched %d rows", w.big_txn())
             next_big += args.big_txn_every
@@ -288,7 +294,7 @@ def run(args):
         if next_at > time.time():
             stop.wait(next_at - time.time())
     ledger.flush()
-    summary = {"ops": done, "seconds": round(time.time() - start, 1), "by_type": w.counts}
+    summary = {"ops": done, "errors": errors, "seconds": round(time.time() - start, 1), "by_type": w.counts}
     L.info("generator done %s", json.dumps(summary))
     print(json.dumps(summary))
 
