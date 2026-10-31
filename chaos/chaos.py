@@ -142,7 +142,7 @@ def scenario_tm_inflight():
     jid = wait_for(lambda: job() and job()["jid"], 120, what="running job")
     history = {h["id"]: h["status"] for h in checkpoints(jid)["history"]}
     restored = (checkpoints(jid).get("latest") or {}).get("restored") or {}
-    return rec | {"killed_during_checkpoint": target, "that_checkpoint": history.get(target), "restored_from": restored.get("id")}
+    return rec | {"fault_s": 5, "killed_during_checkpoint": target, "that_checkpoint": history.get(target), "restored_from": restored.get("id")}
 
 
 def snapshots_for_checkpoint(cid):
@@ -170,7 +170,7 @@ def scenario_tm_pending_commit():
     box("taskmanager").start()
     rec = wait_recovered(t0)
     counts = snapshots_for_checkpoint(cid)
-    return rec | {"pending_checkpoint": cid, "snapshots_for_checkpoint": counts,
+    return rec | {"fault_s": 3, "pending_checkpoint": cid, "snapshots_for_checkpoint": counts,
                   "exactly_once_commit": all(n <= 1 for n in counts.values()) and any(n == 1 for n in counts.values())}
 
 
@@ -183,7 +183,7 @@ def scenario_jm_kill():
     rec = wait_recovered(t0, timeout=600)
     new = wait_for(lambda: job() and job()["jid"], 120, what="running job")
     restored = (checkpoints(new).get("latest") or {}).get("restored") or {}
-    return rec | {"old_job": old, "new_job": new, "restored_from": restored.get("external_path")}
+    return rec | {"fault_s": 10, "old_job": old, "new_job": new, "restored_from": restored.get("external_path")}
 
 
 def scenario_kafka_kill():
@@ -193,7 +193,7 @@ def scenario_kafka_kill():
         time.sleep(60)
     finally:
         box("kafka").start()
-    return wait_recovered(t0, timeout=600) | {"broker_down_s": 60}
+    return wait_recovered(t0, timeout=600) | {"fault_s": 60}
 
 
 def scenario_connect_kill():
@@ -203,7 +203,7 @@ def scenario_connect_kill():
     time.sleep(10)
     box("connect").start()
     rec = wait_recovered(t0, timeout=600)
-    return rec | {"redelivered_before": before}
+    return rec | {"fault_s": 10, "redelivered_before": before}
 
 
 def catalog_pointer(table="orders"):
@@ -225,7 +225,7 @@ def scenario_minio_pause():
         box("minio").unpause()
     rec = wait_recovered(t0, timeout=600)
     now = wait_for(lambda: job() and job()["jid"], 120, what="running job")
-    return rec | {"paused_s": 150, "committed_during_pause": moved,
+    return rec | {"fault_s": 150, "committed_during_pause": moved,
                   "failed_checkpoints": checkpoints(now)["counts"]["failed"] - (failed if now == jid else 0)}
 
 
@@ -304,6 +304,15 @@ def repair(table="orders"):
                   (json.dumps({"data-collections": [f"public.{table}"], "type": "incremental"}),))
 
 
+def delete_zombies(table="orders"):
+    with pg(admin=True) as c:
+        live = {r[0] for r in c.execute(f"SELECT id FROM {table}").fetchall()}
+    zombies = sorted(r[0] for r in query(f"SELECT id FROM {table}") if r[0] not in live)
+    for i in range(0, len(zombies), 500):
+        query(f"DELETE FROM {table} WHERE id IN ({', '.join(map(str, zombies[i:i + 500]))})")
+    return len(zombies)
+
+
 SCENARIOS = {
     "tm-kill-during-checkpoint": (scenario_tm_inflight, 3),
     "tm-kill-before-iceberg-commit": (scenario_tm_pending_commit, 2),
@@ -361,8 +370,12 @@ def negative_control(rate):
     repair()
     time.sleep(60)
     drain()
-    state, waited = reconcile.converge(600)
-    report["repaired"] = {"diffs": sum(r["missing"] + r["extra"] + r["mismatched"] + r["duplicates"] for r in state), "after_s": waited}
+    state, waited = reconcile.converge(120)
+    after_snapshot = sum(r["missing"] + r["extra"] + r["mismatched"] + r["duplicates"] for r in state)
+    zombies = delete_zombies()
+    state, more = reconcile.converge(300)
+    report["repaired"] = {"diffs_after_snapshot": after_snapshot, "zombies_deleted": zombies,
+                          "diffs": sum(r["missing"] + r["extra"] + r["mismatched"] + r["duplicates"] for r in state), "after_s": waited + more}
     json.dump(report, open(f"{RESULTS}/control-replay-without-guard.json", "w"), indent=2, default=str)
     return report
 

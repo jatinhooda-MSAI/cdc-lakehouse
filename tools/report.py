@@ -20,6 +20,10 @@ def load(path):
     return json.load(open(path)) if os.path.exists(path) else None
 
 
+FAULT = {"tm-kill-during-checkpoint": 5, "tm-kill-before-iceberg-commit": 3, "jobmanager-kill": 10, "kafka-broker-kill": 60,
+         "connect-sigkill": 10, "minio-pause-150s": 150}
+
+
 def secs(x):
     return f"{x:.0f} s" if x else "-"
 
@@ -34,7 +38,7 @@ def evidence(r):
     if name == "jobmanager-kill":
         return f"resumed from {ev[0]['restored_from'].rsplit('/', 2)[-1] if ev[0].get('restored_from') else '?'}"
     if name == "kafka-broker-kill":
-        return "broker down 60 s"
+        return f"{r['changelog']['redelivered_events']} events re-sent after the outage"
     if name == "connect-sigkill":
         return f"{r['changelog']['redelivered_events'] - ev[0]['redelivered_before']} events re-sent"
     if name == "minio-pause-150s":
@@ -54,16 +58,19 @@ def chaos_table():
         r = load(f"{RESULTS}/chaos/{name}.json")
         if not r:
             continue
-        running = max(e.get("to_running_s", 0) for e in r["evidence"])
-        fresh = max(e.get("to_caught_up_s", 0) for e in r["evidence"])
+        fault = FAULT.get(name, 0)
+        running = max(e.get("to_running_s", 0) - e.get("fault_s", fault) for e in r["evidence"]) if fault else 0
+        fresh = max(e.get("to_caught_up_s", 0) - e.get("fault_s", fault) for e in r["evidence"]) if fault else 0
         verdict = "pass" if r["ok"] else "FAIL"
         if r["control"]:
-            verdict = f"fails as expected; repaired, {r.get('repaired', {}).get('diffs', '?')} diffs" if not r["ok"] else "control did not fail"
+            rep = r.get("repaired", {})
+            verdict = (f"fails as expected; incremental snapshot left {rep.get('diffs_after_snapshot', '?')} diffs, "
+                       f"deleting {rep.get('zombies_deleted', '?')} resurrected keys left {rep.get('diffs', '?')}") if not r["ok"] else "control did not fail"
         lat = r["latency"]["e2e_ms"]["max"]
-        rows.append(f"| {name} | {r['runs']} | {evidence(r)} | {r['diffs']} | {r['monotonic']['regressions']} | {secs(running)} | "
-                    f"{secs(fresh)} | {secs(lat / 1000 if lat else None)} | {verdict} |")
-    head = ("| scenario | runs | evidence the fault landed | row diffs | version regressions | back to RUNNING | fresh again | "
-            "max latency | result |\n|---|---|---|---|---|---|---|---|---|")
+        rows.append(f"| {name} | {r['runs']} | {secs(fault)} | {evidence(r)} | {r['diffs']} | {r['monotonic']['regressions']} | "
+                    f"{secs(max(running, 0))} | {secs(max(fresh, 0))} | {secs(lat / 1000 if lat else None)} | {verdict} |")
+    head = ("| scenario | runs | fault held | evidence the fault landed | row diffs | version regressions | RUNNING after heal | "
+            "fresh data after heal | worst latency | result |\n|---|---|---|---|---|---|---|---|---|---|")
     return head + "\n" + "\n".join(x for x in rows if x)
 
 

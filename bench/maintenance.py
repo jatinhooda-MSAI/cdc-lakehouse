@@ -66,7 +66,7 @@ def flink_commits(table, since_ms):
                  "AND element_at(summary, 'flink.max-committed-checkpoint-id') IS NOT NULL")[0][0]
 
 
-def measure(table, ids, runs=5):
+def measure(table, ids, runs=3):
     out = {}
     for name, sql in QUERIES.items():
         times = []

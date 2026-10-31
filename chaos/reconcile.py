@@ -152,9 +152,12 @@ def dlq_offsets():
     return out
 
 
-def monotonic(since_ms, table="orders"):
-    snaps = query(f'SELECT snapshot_id FROM "{table}$snapshots" WHERE committed_at >= from_unixtime_nanos({since_ms} * 1000000) '
-                  "ORDER BY committed_at")
+def monotonic(since_ms, table="orders", until_ms=None):
+    since = f"from_unixtime_nanos({since_ms} * 1000000)"
+    until = f"from_unixtime_nanos({until_ms} * 1000000)" if until_ms else "current_timestamp"
+    base = query(f'SELECT snapshot_id FROM "{table}$snapshots" WHERE committed_at < {since} ORDER BY committed_at DESC LIMIT 1')
+    snaps = base + query(f'SELECT snapshot_id FROM "{table}$snapshots" WHERE committed_at >= {since} AND committed_at <= {until} '
+                         "ORDER BY committed_at")
     prev, gone = {}, set()
     regressions = resurrected = 0
     for (sid,) in snaps:
