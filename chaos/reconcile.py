@@ -212,7 +212,14 @@ def ledger():
 def converge(timeout, tables=TABLES):
     start = time.time()
     while True:
-        result = states(tables)
+        try:
+            result = states(tables)
+        except Exception as e:
+            if time.time() - start > timeout:
+                raise
+            L.info("waiting: %s", str(e).splitlines()[0][:120])
+            time.sleep(10)
+            continue
         if all(r["ok"] for r in result) or time.time() - start > timeout:
             return result, round(time.time() - start, 1)
         L.info("waiting: %s", ", ".join(f"{r['table']} {r['iceberg']}/{r['postgres']}" for r in result if not r["ok"]))

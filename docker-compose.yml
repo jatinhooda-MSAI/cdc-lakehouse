@@ -291,7 +291,7 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.20.1
     environment:
       DATA_SOURCE_NAME: postgresql://postgres:postgres@postgres:5432/shop?sslmode=disable
-    command: --collector.replication_slot
+    command: --collector.replication_slots
     depends_on:
       postgres: {condition: service_healthy}
     mem_limit: 64m
