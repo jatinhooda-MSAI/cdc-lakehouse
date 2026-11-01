@@ -220,7 +220,7 @@ services:
       test: ["CMD", "bash", "-c", "[[ $(curl -sf localhost:8080/v1/info) == *'\"starting\":false'* ]]"]
       interval: 5s
       retries: 60
-    mem_limit: 1280m
+    mem_limit: 1536m
     restart: unless-stopped
 
   controller:

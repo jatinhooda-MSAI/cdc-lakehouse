@@ -1,0 +1,16 @@
+{
+  "started": "2026-11-06T08:31:29+00:00",
+  "ok": true,
+  "scenarios": [
+    "tm-kill-during-checkpoint",
+    "tm-kill-before-iceberg-commit",
+    "jobmanager-kill",
+    "kafka-broker-kill",
+    "connect-sigkill",
+    "minio-pause-150s",
+    "replay-old-offsets",
+    "poison-record",
+    "compaction-under-load",
+    "control-replay-without-guard"
+  ]
+}

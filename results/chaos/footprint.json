@@ -1,0 +1,66 @@
+{
+  "maintenance": {
+    "peak_mib": 39.43359375,
+    "limit_mib": 128.0
+  },
+  "exporter": {
+    "peak_mib": 39.875,
+    "limit_mib": 160.0
+  },
+  "controller": {
+    "peak_mib": 103.13671875,
+    "limit_mib": 160.0
+  },
+  "trino": {
+    "peak_mib": 1278.90625,
+    "limit_mib": 1280.0
+  },
+  "connect": {
+    "peak_mib": 651.68359375,
+    "limit_mib": 768.0
+  },
+  "taskmanager": {
+    "peak_mib": 1537.33203125,
+    "limit_mib": 1800.0
+  },
+  "schema-registry": {
+    "peak_mib": 332.2265625,
+    "limit_mib": 448.0
+  },
+  "iceberg-rest": {
+    "peak_mib": 228.38671875,
+    "limit_mib": 320.0
+  },
+  "kafka-exporter": {
+    "peak_mib": 22.81640625,
+    "limit_mib": 64.0
+  },
+  "postgres-exporter": {
+    "peak_mib": 17.2578125,
+    "limit_mib": 64.0
+  },
+  "jobmanager": {
+    "peak_mib": 740.36328125,
+    "limit_mib": 896.0
+  },
+  "postgres": {
+    "peak_mib": 125.27734375,
+    "limit_mib": 320.0
+  },
+  "kafka": {
+    "peak_mib": 487.0859375,
+    "limit_mib": 512.0
+  },
+  "grafana": {
+    "peak_mib": 173.5078125,
+    "limit_mib": 192.0
+  },
+  "prometheus": {
+    "peak_mib": 202.9375,
+    "limit_mib": 256.0
+  },
+  "minio": {
+    "peak_mib": 128.76953125,
+    "limit_mib": 256.0
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "scenario": "kafka-broker-kill",
+  "runs": 1,
+  "control": false,
+  "evidence": [
+    {
+      "to_running_s": 77.3,
+      "to_caught_up_s": 109.6,
+      "fault_s": 60
+    }
+  ],
+  "state": [
+    {
+      "table": "customers",
+      "postgres": 8228,
+      "iceberg": 8228,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    {
+      "table": "products",
+      "postgres": 300,
+      "iceberg": 300,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    {
+      "table": "orders",
+      "postgres": 35822,
+      "iceberg": 35822,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    {
+      "table": "order_items",
+      "postgres": 89530,
+      "iceberg": 89530,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    {
+      "table": "payments",
+      "postgres": 25190,
+      "iceberg": 25190,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    {
+      "table": "type_samples",
+      "postgres": 1166,
+      "iceberg": 1166,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    }
+  ],
+  "converged_after_s": 4.9,
+  "changelog": {
+    "rows": 330950,
+    "duplicate_offsets": 0,
+    "redelivered_events": 365,
+    "version_gaps": 0,
+    "ok": true
+  },
+  "completeness": {
+    "kafka_records": 329587,
+    "tombstones": 22596,
+    "dlq": 0,
+    "not_in_changelog": 0,
+    "ok": true
+  },
+  "monotonic": {
+    "table": "orders",
+    "snapshots": 8,
+    "regressions": 0,
+    "resurrected": 0,
+    "ok": true
+  },
+  "foreign_keys": {
+    "order_items->orders": 0,
+    "payments->orders": 0,
+    "orders->customers": 0,
+    "ok": true
+  },
+  "guard": {
+    "suspect_dropped": 0,
+    "tombstones": 7063,
+    "stale_dropped": 365,
+    "dlq": 0
+  },
+  "ledger": {
+    "diffs": {
+      "customers": 0,
+      "products": 0,
+      "orders": 0,
+      "order_items": 0,
+      "payments": 0,
+      "type_samples": 0
+    },
+    "ok": true
+  },
+  "latency": {
+    "samples": 219,
+    "not_visible": 0,
+    "e2e_ms": {
+      "p50": 26141.0,
+      "p95": 97029.0,
+      "p99": 106040.0,
+      "max": 108043.0,
+      "mean": 36263
+    },
+    "capture_ms": {
+      "p50": 688.0,
+      "p95": 66141.0,
+      "p99": 74958.0,
+      "max": 76588.0,
+      "mean": 14518
+    },
+    "sink_ms": {
+      "p50": 25520.0,
+      "p95": 31864.0,
+      "p99": 32075.0,
+      "max": 32101.0,
+      "mean": 21746
+    }
+  },
+  "window": [
+    1793955223798,
+    1793955423453
+  ],
+  "diffs": 0,
+  "ok": true
+}
