@@ -77,7 +77,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(pg_replication_slot_slot_current_wal_lsn - pg_replication_slot_slot_confirmed_flush_lsn)",
+          "expr": "max(pg_replication_slots_slot_current_wal_lsn - pg_replication_slots_slot_confirmed_flush_lsn)",
           "legendFormat": "debezium slot",
           "datasource": {
             "type": "prometheus",

@@ -7,7 +7,7 @@ groups:
         annotations:
           summary: "Iceberg is more than 5 minutes behind Postgres (heartbeat canary)"
       - alert: ReplicationSlotLagHigh
-        expr: max(pg_replication_slot_slot_current_wal_lsn - pg_replication_slot_slot_confirmed_flush_lsn) > 1073741824
+        expr: max(pg_replication_slots_slot_current_wal_lsn - pg_replication_slots_slot_confirmed_flush_lsn) > 1073741824
         for: 5m
         annotations:
           summary: "Slot debezium retains more than 1 GB of WAL; max_slot_wal_keep_size is 4 GB"

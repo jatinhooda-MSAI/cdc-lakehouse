@@ -15,32 +15,32 @@ SNAPSHOTS = Gauge("lakehouse_snapshots", "snapshots kept in table metadata", ["t
 SCAN = Gauge("lakehouse_scan_seconds", "time for SELECT count(*) on the table", ["table"])
 
 
-def collect():
-    for t in WATCHED:
-        lag = query(f"SELECT to_unixtime(current_timestamp) - to_unixtime(max(_source_ts)) FROM {t}")[0][0]
-        if lag is not None:
-            FRESHNESS.labels(t).set(lag)
-        seen = set()
-        for content, n, size in query(f'SELECT content, count(*), sum(file_size_in_bytes) FROM "{t}$files" GROUP BY content'):
-            FILES.labels(t, CONTENT[content]).set(n)
-            FILE_BYTES.labels(t, CONTENT[content]).set(size)
-            seen.add(content)
-        for content in set(CONTENT) - seen:
-            FILES.labels(t, CONTENT[content]).set(0)
-            FILE_BYTES.labels(t, CONTENT[content]).set(0)
-        SNAPSHOTS.labels(t).set(query(f'SELECT count(*) FROM "{t}$snapshots"')[0][0])
-        start = time.time()
-        query(f"SELECT count(*) FROM {t}")
-        SCAN.labels(t).set(time.time() - start)
+def collect(t):
+    lag = query(f"SELECT to_unixtime(current_timestamp) - to_unixtime(max(_source_ts)) FROM {t}")[0][0]
+    if lag is not None:
+        FRESHNESS.labels(t).set(lag)
+    seen = set()
+    for content, n, size in query(f'SELECT content, count(*), sum(file_size_in_bytes) FROM "{t}$files" GROUP BY content'):
+        FILES.labels(t, CONTENT[content]).set(n)
+        FILE_BYTES.labels(t, CONTENT[content]).set(size)
+        seen.add(content)
+    for content in set(CONTENT) - seen:
+        FILES.labels(t, CONTENT[content]).set(0)
+        FILE_BYTES.labels(t, CONTENT[content]).set(0)
+    SNAPSHOTS.labels(t).set(query(f'SELECT count(*) FROM "{t}$snapshots"')[0][0])
+    start = time.time()
+    query(f"SELECT count(*) FROM {t}")
+    SCAN.labels(t).set(time.time() - start)
 
 
 def main():
     start_http_server(8000)
     while True:
-        try:
-            collect()
-        except Exception as e:
-            L.warning("collect failed: %s", e)
+        for t in WATCHED:
+            try:
+                collect(t)
+            except Exception as e:
+                L.warning("collect %s failed: %s", t, str(e).splitlines()[0][:160])
         time.sleep(30)
 
 
