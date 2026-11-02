@@ -42,7 +42,7 @@ def evidence(r):
     if name == "connect-sigkill":
         return f"{r['changelog']['redelivered_events'] - ev[0]['redelivered_before']} events re-sent"
     if name == "minio-pause-150s":
-        return f"{'commits continued' if ev[0]['committed_during_pause'] else 'no commits'} during pause, {ev[0]['failed_checkpoints']} failed checkpoints"
+        return f"{'commits continued' if ev[0]['committed_during_pause'] else 'no commits'} during pause, {ev[0]['failed_checkpoints']} checkpoint(s) failed"
     if name in ("replay-old-offsets", "control-replay-without-guard"):
         return f"{ev[0]['replayed']} old records re-produced, {ev[0]['stale_dropped']} dropped"
     if name == "poison-record":
@@ -59,7 +59,6 @@ def chaos_table():
         if not r:
             continue
         fault = FAULT.get(name, 0)
-        running = max(e.get("to_running_s", 0) - e.get("fault_s", fault) for e in r["evidence"]) if fault else 0
         fresh = max(e.get("to_caught_up_s", 0) - e.get("fault_s", fault) for e in r["evidence"]) if fault else 0
         verdict = "pass" if r["ok"] else "FAIL"
         if r["control"]:
@@ -68,9 +67,9 @@ def chaos_table():
                        f"deleting {rep.get('zombies_deleted', '?')} resurrected keys left {rep.get('diffs', '?')}") if not r["ok"] else "control did not fail"
         lat = r["latency"]["e2e_ms"]["max"]
         rows.append(f"| {name} | {r['runs']} | {secs(fault)} | {evidence(r)} | {r['diffs']} | {r['monotonic']['regressions']} | "
-                    f"{secs(max(running, 0))} | {secs(max(fresh, 0))} | {secs(lat / 1000 if lat else None)} | {verdict} |")
-    head = ("| scenario | runs | fault held | evidence the fault landed | row diffs | version regressions | RUNNING after heal | "
-            "fresh data after heal | worst latency | result |\n|---|---|---|---|---|---|---|---|---|---|")
+                    f"{secs(max(fresh, 0))} | {secs(lat / 1000 if lat else None)} | {verdict} |")
+    head = ("| scenario | runs | fault held | evidence the fault landed | row diffs | version regressions | "
+            "fresh data after heal | worst latency | result |\n|---|---|---|---|---|---|---|---|---|")
     return head + "\n" + "\n".join(x for x in rows if x)
 
 
@@ -138,7 +137,7 @@ def footprint_table():
 
 
 def splice(text, tag, body):
-    return re.sub(rf"(<!-- {tag} -->\n).*?(\n<!-- /{tag} -->)", lambda m: m.group(1) + body + m.group(2), text, flags=re.S)
+    return re.sub(rf"(<!-- {tag} -->\n).*?(<!-- /{tag} -->)", lambda m: m.group(1) + body + "\n" + m.group(2), text, flags=re.S)
 
 
 def main():
