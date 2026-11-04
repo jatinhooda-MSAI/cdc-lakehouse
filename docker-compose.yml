@@ -216,6 +216,8 @@ services:
     ports: ["18080:8080"]
     volumes:
       - ./trino/catalog:/etc/trino/catalog:ro
+      - ./trino/jvm.config:/etc/trino/jvm.config:ro
+      - ./trino/config.properties:/etc/trino/config.properties:ro
     healthcheck:
       test: ["CMD", "bash", "-c", "[[ $(curl -sf localhost:8080/v1/info) == *'\"starting\":false'* ]]"]
       interval: 5s

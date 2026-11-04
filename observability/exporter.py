@@ -1,3 +1,4 @@
+import os
 import time
 
 from prometheus_client import Gauge, start_http_server
@@ -36,6 +37,9 @@ def collect(t):
 def main():
     start_http_server(8000)
     while True:
+        if os.path.exists("/app/.state/exporter-paused"):
+            time.sleep(30)
+            continue
         for t in WATCHED:
             try:
                 collect(t)

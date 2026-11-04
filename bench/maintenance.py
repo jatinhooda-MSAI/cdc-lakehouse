@@ -86,7 +86,7 @@ def trino_up():
     wait_for(lambda: query("SELECT 1") == [[1]], 300, 5, "trino")
 
 
-def measure(table, ids, runs=3):
+def measure(table, ids, runs=5):
     files = dict(query(f'SELECT content, count(*) FROM "{table}$files" GROUP BY content'))
     out = {"data_files": files.get(0, 0), "delete_files": files.get(1, 0) + files.get(2, 0),
            "snapshots": query(f'SELECT count(*) FROM "{table}$snapshots"')[0][0]}
@@ -130,6 +130,7 @@ def main():
     args = ap.parse_args()
 
     flag("maintenance-paused", True)
+    flag("exporter-paused", True)
     if any(t[-1] == "orders_raw" for t in catalog().list_tables(NAMESPACE)):
         teardown()
     flag("supervisor-paused", True)
@@ -173,6 +174,7 @@ def main():
     json.dump(result, open(args.out, "w"), indent=2)
     teardown()
     flag("maintenance-paused", False)
+    flag("exporter-paused", False)
 
 
 if __name__ == "__main__":
