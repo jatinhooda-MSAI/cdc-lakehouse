@@ -35,12 +35,28 @@ def running():
     return jobs[0]["jid"] if jobs else None
 
 
+def settled(jid):
+    if any(v["status"] != "RUNNING" for v in get(f"{FLINK}/jobs/{jid}")["vertices"]):
+        return False
+    latest = get(f"{FLINK}/jobs/{jid}/checkpoints").get("latest") or {}
+    return (latest.get("completed") or {}).get("latest_ack_timestamp", 0) > (latest.get("restored") or {}).get("restore_timestamp", 0)
+
+
 def stop_with_savepoint():
-    jid = running()
-    r = requests.post(f"{FLINK}/jobs/{jid}/stop", json={"drain": False, "targetDirectory": "s3://flink/savepoints"}, timeout=30)
-    r.raise_for_status()
-    wait_for(lambda: get(f"{FLINK}/jobs/{jid}")["state"] == "FINISHED", 300, what="job stopped")
-    return jid
+    jid = wait_for(running, 300, 2, "running job")
+    for attempt in range(5):
+        wait_for(lambda: settled(jid), 300, 2, "job settled")
+        r = requests.post(f"{FLINK}/jobs/{jid}/stop", json={"drain": False, "targetDirectory": "s3://flink/savepoints"}, timeout=30)
+        r.raise_for_status()
+        trigger = r.json()["request-id"]
+        status = wait_for(lambda: (lambda s: s if s["status"]["id"] == "COMPLETED" else None)(
+            get(f"{FLINK}/jobs/{jid}/savepoints/{trigger}")), 300, 2, "savepoint")
+        if "failure-cause" not in status.get("operation", {}):
+            wait_for(lambda: get(f"{FLINK}/jobs/{jid}")["state"] == "FINISHED", 300, 2, "job stopped")
+            return jid
+        L.warning("savepoint attempt %d failed: %s", attempt + 1, str(status["operation"]["failure-cause"])[:200])
+        time.sleep(10)
+    raise RuntimeError("could not stop the job with a savepoint")
 
 
 def restart(old):
@@ -66,8 +82,14 @@ def flink_commits(table, since_ms):
                  "AND element_at(summary, 'flink.max-committed-checkpoint-id') IS NOT NULL")[0][0]
 
 
+def trino_up():
+    wait_for(lambda: query("SELECT 1") == [[1]], 300, 5, "trino")
+
+
 def measure(table, ids, runs=3):
-    out = {}
+    files = dict(query(f'SELECT content, count(*) FROM "{table}$files" GROUP BY content'))
+    out = {"data_files": files.get(0, 0), "delete_files": files.get(1, 0) + files.get(2, 0),
+           "snapshots": query(f'SELECT count(*) FROM "{table}$snapshots"')[0][0]}
     for name, sql in QUERIES.items():
         times = []
         for _ in range(runs):
@@ -76,14 +98,25 @@ def measure(table, ids, runs=3):
                 query(sql.format(t=table, id=random.choice(ids)))
                 times.append(time.time() - start)
             except Exception as e:
-                out[f"{name}_error"] = str(e).splitlines()[0][:160]
-                break
-        out[name] = round(statistics.median(times) * 1000) if times else None
-    files = dict(query(f'SELECT content, count(*) FROM "{table}$files" GROUP BY content'))
-    out["data_files"] = files.get(0, 0)
-    out["delete_files"] = files.get(1, 0) + files.get(2, 0)
-    out["snapshots"] = query(f'SELECT count(*) FROM "{table}$snapshots"')[0][0]
+                out["error"] = f"{name}: {str(e).splitlines()[0][:160]}"
+                trino_up()
+                return out
+        out[name] = round(statistics.median(times) * 1000)
     return out
+
+
+def teardown():
+    flag("supervisor-paused", True)
+    if os.path.exists(ARGS_FILE):
+        os.remove(ARGS_FILE)
+    old = stop_with_savepoint()
+    try:
+        catalog().drop_table((NAMESPACE, "orders_raw"))
+    except Exception:
+        pass
+    flag("allow-non-restored", True)
+    restart(old)
+    flag("allow-non-restored", False)
 
 
 def main():
@@ -91,12 +124,14 @@ def main():
     ap.add_argument("--minutes", type=int, default=60)
     ap.add_argument("--checkpoint-ms", type=int, default=5000)
     ap.add_argument("--rate", type=float, default=200)
-    ap.add_argument("--every-commits", type=int, default=60)
+    ap.add_argument("--every-commits", type=int, default=30)
     ap.add_argument("--maintain-every", type=int, default=120)
     ap.add_argument("--out", default="/app/results/maintenance.json")
     args = ap.parse_args()
 
     flag("maintenance-paused", True)
+    if any(t[-1] == "orders_raw" for t in catalog().list_tables(NAMESPACE)):
+        teardown()
     flag("supervisor-paused", True)
     open(ARGS_FILE, "w").write(f"--checkpoint-ms {args.checkpoint_ms}\n")
     old = stop_with_savepoint()
@@ -105,21 +140,27 @@ def main():
     ids = [r[0] for r in query("SELECT id FROM orders ORDER BY id DESC LIMIT 2000")]
     start = int(time.time() * 1000)
     gen = subprocess.Popen([sys.executable, "-m", "generator.generator", "run", "--rate", str(args.rate), "--seed", "41"])
-    series, maintained_at, next_point, next_maint = [], [], 0, args.maintain_every
+    series, maintained_at, next_point, next_maint, raw_ok = [], [], 0, args.maintain_every, True
     try:
         deadline = time.time() + args.minutes * 60
         while time.time() < deadline:
-            commits = flink_commits("orders", start)
-            if commits >= next_maint:
-                cycle(["orders"], "30m", "1h")
-                maintained_at.append(commits)
-                next_maint += args.maintain_every
-            if commits >= next_point:
-                point = {"commits": commits, "elapsed_s": round(time.time() - start / 1000),
-                         "maintained": measure("orders", ids), "raw": measure("orders_raw", ids)}
-                series.append(point)
-                L.info("%s", json.dumps(point))
-                next_point = commits + args.every_commits
+            try:
+                commits = flink_commits("orders", start)
+                if commits >= next_maint:
+                    cycle(["orders"], "30m", "1h")
+                    maintained_at.append(commits)
+                    next_maint += args.maintain_every
+                if commits >= next_point:
+                    point = {"commits": commits, "elapsed_s": round(time.time() - start / 1000), "maintained": measure("orders", ids)}
+                    if raw_ok:
+                        point["raw"] = measure("orders_raw", ids)
+                        raw_ok = "error" not in point["raw"]
+                    series.append(point)
+                    L.info("%s", json.dumps(point))
+                    next_point = commits + args.every_commits
+            except Exception as e:
+                L.warning("benchmark step failed: %s", str(e).splitlines()[0][:160])
+                trino_up()
             time.sleep(5)
     finally:
         gen.terminate()
@@ -130,14 +171,7 @@ def main():
                                              f"AND kafka_ts >= from_unixtime_nanos({start} * 1000000)")[0][0] / max(1, flink_commits("orders", start))),
               "series": series}
     json.dump(result, open(args.out, "w"), indent=2)
-
-    flag("supervisor-paused", True)
-    os.remove(ARGS_FILE)
-    old = stop_with_savepoint()
-    catalog().drop_table((NAMESPACE, "orders_raw"))
-    flag("allow-non-restored", True)
-    restart(old)
-    flag("allow-non-restored", False)
+    teardown()
     flag("maintenance-paused", False)
 
 
