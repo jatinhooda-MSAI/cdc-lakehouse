@@ -4,35 +4,35 @@
   "control": false,
   "evidence": [
     {
-      "to_running_s": 19.8,
-      "to_caught_up_s": 33.9,
+      "to_running_s": 5.3,
+      "to_caught_up_s": 40.3,
       "fault_s": 5,
-      "killed_during_checkpoint": 3,
+      "killed_during_checkpoint": 2,
       "that_checkpoint": "FAILED",
-      "restored_from": 2
+      "restored_from": 1
     },
     {
-      "to_running_s": 17.8,
-      "to_caught_up_s": 51.6,
+      "to_running_s": 5.2,
+      "to_caught_up_s": 39.0,
       "fault_s": 5,
-      "killed_during_checkpoint": 7,
+      "killed_during_checkpoint": 6,
       "that_checkpoint": "FAILED",
-      "restored_from": 6
+      "restored_from": 5
     },
     {
-      "to_running_s": 5.5,
-      "to_caught_up_s": 36.8,
+      "to_running_s": 5.2,
+      "to_caught_up_s": 37.4,
       "fault_s": 5,
-      "killed_during_checkpoint": 11,
+      "killed_during_checkpoint": 10,
       "that_checkpoint": "FAILED",
-      "restored_from": 10
+      "restored_from": 9
     }
   ],
   "state": [
     {
       "table": "customers",
-      "postgres": 4217,
-      "iceberg": 4217,
+      "postgres": 4072,
+      "iceberg": 4072,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -53,8 +53,8 @@
     },
     {
       "table": "orders",
-      "postgres": 19038,
-      "iceberg": 19038,
+      "postgres": 18523,
+      "iceberg": 18523,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -64,8 +64,8 @@
     },
     {
       "table": "order_items",
-      "postgres": 47591,
-      "iceberg": 47591,
+      "postgres": 46234,
+      "iceberg": 46234,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -75,8 +75,8 @@
     },
     {
       "table": "payments",
-      "postgres": 12987,
-      "iceberg": 12987,
+      "postgres": 12626,
+      "iceberg": 12626,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -86,8 +86,8 @@
     },
     {
       "table": "type_samples",
-      "postgres": 766,
-      "iceberg": 766,
+      "postgres": 716,
+      "iceberg": 716,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -96,17 +96,17 @@
       "ok": true
     }
   ],
-  "converged_after_s": 3.1,
+  "converged_after_s": 2.9,
   "changelog": {
-    "rows": 144704,
+    "rows": 138610,
     "duplicate_offsets": 0,
     "redelivered_events": 0,
     "version_gaps": 0,
     "ok": true
   },
   "completeness": {
-    "kafka_records": 144220,
-    "tombstones": 8108,
+    "kafka_records": 138156,
+    "tombstones": 7451,
     "dlq": 0,
     "not_in_changelog": 0,
     "ok": true
@@ -125,10 +125,10 @@
     "ok": true
   },
   "guard": {
-    "suspect_dropped": 0,
-    "tombstones": 3166,
     "dlq": 0,
-    "stale_dropped": 0
+    "stale_dropped": 0,
+    "tombstones": 2958,
+    "suspect_dropped": 0
   },
   "ledger": {
     "diffs": {
@@ -142,33 +142,33 @@
     "ok": true
   },
   "latency": {
-    "samples": 426,
+    "samples": 399,
     "not_visible": 0,
     "e2e_ms": {
-      "p50": 22659.0,
-      "p95": 63171.0,
-      "p99": 77190.0,
-      "max": 81201.0,
-      "mean": 26580
+      "p50": 22219.0,
+      "p95": 59265.0,
+      "p99": 65277.0,
+      "max": 67631.0,
+      "mean": 25266
     },
     "capture_ms": {
-      "p50": 502.0,
-      "p95": 865.0,
-      "p99": 966.0,
-      "max": 1224.0,
-      "mean": 507
+      "p50": 492.0,
+      "p95": 850.0,
+      "p99": 928.0,
+      "max": 949.0,
+      "mean": 496
     },
     "sink_ms": {
-      "p50": 22063.0,
-      "p95": 62367.0,
-      "p99": 77085.0,
-      "max": 80653.0,
-      "mean": 26073
+      "p50": 21668.0,
+      "p95": 58629.0,
+      "p99": 64702.0,
+      "max": 66896.0,
+      "mean": 24770
     }
   },
   "window": [
-    1793953909303,
-    1793954317421
+    1793967858762,
+    1793968238721
   ],
   "diffs": 0,
   "ok": true

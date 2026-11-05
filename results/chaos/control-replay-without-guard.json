@@ -7,14 +7,14 @@
       "replayed": 2100,
       "stale_dropped": 0,
       "to_running_s": 0,
-      "to_caught_up_s": 70.4
+      "to_caught_up_s": 70.5
     }
   ],
   "state": [
     {
       "table": "customers",
-      "postgres": 12106,
-      "iceberg": 12106,
+      "postgres": 11757,
+      "iceberg": 11757,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -35,11 +35,11 @@
     },
     {
       "table": "orders",
-      "postgres": 52397,
-      "iceberg": 52505,
+      "postgres": 51019,
+      "iceberg": 51150,
       "missing": 0,
-      "extra": 108,
-      "mismatched": 867,
+      "extra": 131,
+      "mismatched": 863,
       "duplicates": 0,
       "placeholders": 0,
       "ok": false,
@@ -49,8 +49,8 @@
           "shipped"
         ],
         "updated_at": [
-          "2026-11-06T08:55:13.618830+00:00",
-          "2026-11-06T08:50:21.404132+00:00"
+          "2026-11-06T12:46:05.381458+00:00",
+          "2026-11-06T12:42:01.185520+00:00"
         ],
         "version": [
           5,
@@ -60,8 +60,8 @@
     },
     {
       "table": "order_items",
-      "postgres": 131050,
-      "iceberg": 131050,
+      "postgres": 127622,
+      "iceberg": 127622,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -71,8 +71,8 @@
     },
     {
       "table": "payments",
-      "postgres": 37120,
-      "iceberg": 37120,
+      "postgres": 36099,
+      "iceberg": 36099,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -82,8 +82,8 @@
     },
     {
       "table": "type_samples",
-      "postgres": 1546,
-      "iceberg": 1546,
+      "postgres": 1491,
+      "iceberg": 1491,
       "missing": 0,
       "extra": 0,
       "mismatched": 0,
@@ -94,15 +94,15 @@
   ],
   "converged_after_s": 0,
   "changelog": {
-    "rows": 521563,
+    "rows": 506318,
     "duplicate_offsets": 0,
-    "redelivered_events": 7809,
+    "redelivered_events": 8121,
     "version_gaps": 0,
     "ok": true
   },
   "completeness": {
-    "kafka_records": 519298,
-    "tombstones": 36241,
+    "kafka_records": 504096,
+    "tombstones": 35523,
     "dlq": 1,
     "not_in_changelog": 0,
     "ok": true
@@ -110,8 +110,8 @@
   "monotonic": {
     "table": "orders",
     "snapshots": 6,
-    "regressions": 907,
-    "resurrected": 4,
+    "regressions": 904,
+    "resurrected": 0,
     "ok": false
   },
   "foreign_keys": {
@@ -121,10 +121,10 @@
     "ok": true
   },
   "guard": {
-    "dlq": 0,
+    "tombstones": 2057,
+    "stale_dropped": 0,
     "suspect_dropped": 0,
-    "tombstones": 2196,
-    "stale_dropped": 0
+    "dlq": 0
   },
   "ledger": {
     "diffs": {
@@ -138,40 +138,40 @@
     "ok": true
   },
   "latency": {
-    "samples": 121,
+    "samples": 119,
     "not_visible": 0,
     "e2e_ms": {
-      "p50": 17051.0,
-      "p95": 29852.0,
-      "p99": 31475.0,
-      "max": 32493.0,
-      "mean": 16862
+      "p50": 16826.0,
+      "p95": 30265.0,
+      "p99": 31604.0,
+      "max": 31878.0,
+      "mean": 16769
     },
     "capture_ms": {
-      "p50": 504.0,
-      "p95": 830.0,
-      "p99": 917.0,
-      "max": 926.0,
-      "mean": 489
+      "p50": 516.0,
+      "p95": 865.0,
+      "p99": 925.0,
+      "max": 941.0,
+      "mean": 513
     },
     "sink_ms": {
-      "p50": 16500.0,
-      "p95": 29453.0,
-      "p99": 31106.0,
-      "max": 31621.0,
-      "mean": 16373
+      "p50": 16264.0,
+      "p95": 29503.0,
+      "p99": 31015.0,
+      "max": 31214.0,
+      "mean": 16257
     }
   },
   "window": [
-    1793956715329,
-    1793956817094
+    1793970668689,
+    1793970770491
   ],
-  "diffs": 975,
+  "diffs": 994,
   "ok": false,
   "repaired": {
-    "diffs_after_snapshot": 108,
-    "zombies_deleted": 108,
+    "diffs_after_snapshot": 131,
+    "zombies_deleted": 131,
     "diffs": 0,
-    "after_s": 128.79999999999998
+    "after_s": 137.0
   }
 }

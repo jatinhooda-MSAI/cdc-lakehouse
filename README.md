@@ -4,7 +4,7 @@ Postgres replicated into Apache Iceberg through Debezium, Kafka and Flink, queri
 
 Results:
 - 12 injected faults across 9 scenarios ended with 0 differing rows. No order's version went backwards in any `orders` snapshot taken during the runs.
-- Running the same replay with the guard switched off left 975 wrong rows.
+- Running the same replay with the guard switched off left 994 wrong rows.
 - With 30 s checkpoints, p95 from Postgres commit to queryable in Trino is 30.4 s.
 
 ```
@@ -37,21 +37,21 @@ UIs: Flink `localhost:8081`, Trino `localhost:18080`, Grafana `localhost:3000`, 
 
 ### Failure injection
 
-`make reset && make up && make seed && make chaos` ran unattended in 57 minutes on an M-series MacBook with 7.6 GiB for the Docker VM. During every scenario the generator runs at 100 ops/s. The load covers inserts, order status updates, cascading deletes, and price updates on products whose 4.8 KB descriptions Postgres stores out of line (TOAST). It also includes primary key updates, a 300 to 600 row transaction every two minutes, and one latency probe per second. Every scenario ends with the drain and every check listed under "How correctness is checked". "Fault held" is how long the component was down or paused. "Fresh data after heal" is the time from the component coming back until a probe row written at that moment was queryable in Trino. Raw output is in `results/chaos/`.
+`make reset && make up && make seed && make chaos` ran unattended in 58 minutes on an M-series MacBook with 7.6 GiB for the Docker VM. During every scenario the generator runs at 100 ops/s. The load covers inserts, order status updates, cascading deletes, and price updates on products whose 4.8 KB descriptions Postgres stores out of line (TOAST). It also includes primary key updates, a 300 to 600 row transaction every two minutes, and one latency probe per second. Every scenario ends with the drain and every check listed under "How correctness is checked". "Fault held" is how long the component was down or paused. "Fresh data after heal" is the time from the component coming back until a probe row written at that moment was queryable in Trino. Raw output is in `results/chaos/`.
 
 <!-- chaos -->
 | scenario | runs | fault held | evidence the fault landed | row diffs | version regressions | fresh data after heal | worst latency | result |
 |---|---|---|---|---|---|---|---|---|
-| tm-kill-during-checkpoint | 3 | 5 s | chk 3 failed, restored 2; chk 7 failed, restored 6; chk 11 failed, restored 10 | 0 | 0 | 47 s | 81 s | pass |
-| tm-kill-before-iceberg-commit | 2 | 3 s | chk 21 committed 1x; chk 26 committed 1x | 0 | 0 | 55 s | 60 s | pass |
-| jobmanager-kill | 1 | 10 s | resumed from chk-34 | 0 | 0 | 59 s | 79 s | pass |
-| kafka-broker-kill | 1 | 60 s | 365 events re-sent after the outage | 0 | 0 | 50 s | 108 s | pass |
-| connect-sigkill | 1 | 10 s | 3244 events re-sent | 0 | 0 | 40 s | 49 s | pass |
-| minio-pause-150s | 1 | 150 s | no commits during pause, 1 checkpoint(s) failed | 0 | 0 | 9 s | 167 s | pass |
+| tm-kill-during-checkpoint | 3 | 5 s | chk 2 failed, restored 1; chk 6 failed, restored 5; chk 10 failed, restored 9 | 0 | 0 | 35 s | 68 s | pass |
+| tm-kill-before-iceberg-commit | 2 | 3 s | chk 20 committed 1x; chk 25 committed 1x | 0 | 0 | 47 s | 57 s | pass |
+| jobmanager-kill | 1 | 10 s | resumed from chk-33 | 0 | 0 | 67 s | 87 s | pass |
+| kafka-broker-kill | 1 | 60 s | 3561 events re-sent after the outage | 0 | 0 | 48 s | 102 s | pass |
+| connect-sigkill | 1 | 10 s | 360 events re-sent | 0 | 0 | 40 s | 49 s | pass |
+| minio-pause-150s | 1 | 150 s | no commits during pause, 1 checkpoint(s) failed | 0 | 0 | 19 s | 183 s | pass |
 | replay-old-offsets | 1 | - | 2100 old records re-produced, 2100 dropped | 0 | 0 | - | 32 s | pass |
 | poison-record | 1 | - | 1 record in DLQ | 0 | 0 | - | 31 s | pass |
-| compaction-under-load | 1 | - | orders ok, order_items ok, payments ok | 0 | 0 | - | 32 s | pass |
-| control-replay-without-guard | 1 | - | 2100 old records re-produced, 0 dropped | 975 | 907 | - | 32 s | fails as expected; incremental snapshot left 108 diffs, deleting 108 resurrected keys left 0 |
+| compaction-under-load | 1 | - | orders ok, order_items ok, payments ok | 0 | 0 | - | 33 s | pass |
+| control-replay-without-guard | 1 | - | 2100 old records re-produced, 0 dropped | 994 | 904 | - | 32 s | fails as expected; incremental snapshot left 131 diffs, deleting 131 resurrected keys left 0 |
 <!-- /chaos -->
 
 ### Latency
@@ -109,28 +109,28 @@ Read cost follows the delete-file count, not the row count. Each commit added ab
 
 ### Footprint
 
-Peak memory per container, sampled every minute during `make chaos`. Trino ran at its limit. After this run it got 1.5 GB with a fixed 896 MB heap (see the notes).
+Peak memory per container, sampled every minute during `make chaos`. Trino reaches its limit, because the 896 MB heap plus native memory and page cache fill the container. It did not restart during the run.
 
 <!-- footprint -->
 | container | peak during chaos | limit |
 |---|---|---|
-| taskmanager | 1537 MiB | 1800 MiB |
-| trino | 1279 MiB | 1280 MiB |
-| jobmanager | 740 MiB | 896 MiB |
-| connect | 652 MiB | 768 MiB |
-| kafka | 487 MiB | 512 MiB |
-| schema-registry | 332 MiB | 448 MiB |
-| iceberg-rest | 228 MiB | 320 MiB |
-| prometheus | 203 MiB | 256 MiB |
-| grafana | 174 MiB | 192 MiB |
-| minio | 129 MiB | 256 MiB |
-| postgres | 125 MiB | 320 MiB |
-| controller | 103 MiB | 160 MiB |
-| exporter | 40 MiB | 160 MiB |
-| maintenance | 39 MiB | 128 MiB |
-| kafka-exporter | 23 MiB | 64 MiB |
-| postgres-exporter | 17 MiB | 64 MiB |
-| total | 6.0 GiB | |
+| taskmanager | 1591 MiB | 1800 MiB |
+| trino | 1533 MiB | 1536 MiB |
+| jobmanager | 729 MiB | 896 MiB |
+| connect | 622 MiB | 768 MiB |
+| kafka | 401 MiB | 512 MiB |
+| schema-registry | 328 MiB | 448 MiB |
+| prometheus | 225 MiB | 256 MiB |
+| iceberg-rest | 223 MiB | 320 MiB |
+| minio | 205 MiB | 256 MiB |
+| grafana | 167 MiB | 192 MiB |
+| postgres | 105 MiB | 320 MiB |
+| controller | 85 MiB | 160 MiB |
+| exporter | 41 MiB | 160 MiB |
+| maintenance | 41 MiB | 128 MiB |
+| kafka-exporter | 25 MiB | 64 MiB |
+| postgres-exporter | 20 MiB | 64 MiB |
+| total | 6.2 GiB | |
 <!-- /footprint -->
 
 ## How correctness is checked
