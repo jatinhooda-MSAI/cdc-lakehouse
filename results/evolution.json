@@ -1,0 +1,170 @@
+[
+  {
+    "step": "add nullable column",
+    "ddl": "ALTER TABLE orders ADD COLUMN priority smallint",
+    "expected": "applied",
+    "observed": "applied",
+    "resolution": "-",
+    "reconcile": {
+      "table": "orders",
+      "postgres": 10000,
+      "iceberg": 10000,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    "job_restarts": 1,
+    "seconds": 18.0,
+    "schema_versions": 2,
+    "ok": true
+  },
+  {
+    "step": "add column with default",
+    "ddl": "ALTER TABLE customers ADD COLUMN loyalty_tier text NOT NULL DEFAULT 'bronze'",
+    "expected": "applied",
+    "observed": "applied",
+    "resolution": "-",
+    "reconcile": {
+      "table": "customers",
+      "postgres": 2000,
+      "iceberg": 2000,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    "job_restarts": 1,
+    "seconds": 31.8,
+    "schema_versions": 2,
+    "ok": true
+  },
+  {
+    "step": "widen int to bigint",
+    "ddl": "ALTER TABLE order_items ALTER COLUMN quantity TYPE bigint",
+    "expected": "applied",
+    "observed": "applied",
+    "resolution": "-",
+    "reconcile": {
+      "table": "order_items",
+      "postgres": 24901,
+      "iceberg": 24901,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    "job_restarts": 1,
+    "seconds": 17.5,
+    "schema_versions": 2,
+    "ok": true
+  },
+  {
+    "step": "narrow back to int",
+    "ddl": "ALTER TABLE order_items ALTER COLUMN quantity TYPE integer",
+    "expected": "applied",
+    "observed": "applied",
+    "resolution": "-",
+    "reconcile": {
+      "table": "order_items",
+      "postgres": 24901,
+      "iceberg": 24901,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    "job_restarts": 0,
+    "seconds": 29.7,
+    "schema_versions": 2,
+    "ok": true
+  },
+  {
+    "step": "narrow to smallint",
+    "ddl": "ALTER TABLE order_items ALTER COLUMN quantity TYPE smallint",
+    "expected": "rejected",
+    "observed": "rejected by schema registry",
+    "resolution": "compatibility NONE for the subject",
+    "reason": "Caused by: io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException: Schema being registered is incompatible with an earlier schema for subject \"dbserver.public.order_items-value\", details: [{errorType:'MISSING_UNION_BRA",
+    "reconcile": {
+      "table": "order_items",
+      "postgres": 24901,
+      "iceberg": 24901,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    "job_restarts": 1,
+    "seconds": 30.1,
+    "schema_versions": 3,
+    "ok": true
+  },
+  {
+    "step": "rename column",
+    "ddl": "ALTER TABLE customers RENAME COLUMN full_name TO display_name",
+    "expected": "halted",
+    "observed": "rejected by schema registry then halted",
+    "resolution": "compatibility NONE for the subject, then make schema-resolve rename full_name display_name",
+    "reason": "v3 removed ['full_name']; added ['display_name'], possibly a rename; run make schema-resolve",
+    "reconcile": {
+      "table": "customers",
+      "postgres": 2000,
+      "iceberg": 2000,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    "job_restarts": 1,
+    "seconds": 42.0,
+    "schema_versions": 3,
+    "ok": true
+  },
+  {
+    "step": "drop column",
+    "ddl": "ALTER TABLE products DROP COLUMN description",
+    "expected": "halted",
+    "observed": "halted",
+    "resolution": "make schema-resolve drop description",
+    "reason": "v2 removed ['description']; run make schema-resolve",
+    "reconcile": {
+      "table": "products",
+      "postgres": 300,
+      "iceberg": 300,
+      "missing": 0,
+      "extra": 0,
+      "mismatched": 0,
+      "duplicates": 0,
+      "placeholders": 0,
+      "ok": true
+    },
+    "job_restarts": 1,
+    "seconds": 15.8,
+    "schema_versions": 2,
+    "ok": true
+  },
+  {
+    "step": "change numeric scale",
+    "ddl": "ALTER TABLE payments ALTER COLUMN amount TYPE numeric(12,4)",
+    "expected": "halted",
+    "observed": "halted",
+    "resolution": "-",
+    "reason": "v2 column amount: decimal(12, 2) -> decimal(12, 4) is not representable in Iceberg",
+    "seconds": 5.3,
+    "final": "left halted: Iceberg cannot change a decimal scale",
+    "ok": true
+  }
+]

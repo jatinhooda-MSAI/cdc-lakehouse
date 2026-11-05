@@ -29,7 +29,7 @@ make seed        # bulk-load the shop, register Debezium (initial snapshot), rec
 make chaos       # failure scenarios under load, each followed by a full reconcile
 ```
 
-Other targets: `make load` (steady workload with latency probes), `make reconcile`, `make evolve` (schema change suite, ends with one table halted on purpose), `make bench-latency`, `make bench-maintenance`, `make maintain`, `make upgrade` (rebuild the job and restart it through a savepoint), `make report` (rewrites the tables below from `results/`), `make trino`, `make reset`.
+Other targets: `make load` (steady workload with latency probes), `make reconcile`, `make evolve` (schema change suite; run it on a fresh stack, it ends with one table halted on purpose), `make bench-latency`, `make bench-maintenance`, `make maintain`, `make upgrade` (rebuild the job and restart it through a savepoint), `make report` (rewrites the tables below from `results/`), `make trino`, `make reset`.
 
 UIs: Flink `localhost:8081`, Trino `localhost:18080`, Grafana `localhost:3000`, Prometheus `localhost:9090`, MinIO `localhost:9001`.
 
@@ -68,12 +68,25 @@ UIs: Flink `localhost:8081`, Trino `localhost:18080`, Grafana `localhost:3000`, 
 
 ### Schema changes
 
-`make evolve` runs DDL against the live pipeline, one statement at a time. Each step waits for the expected outcome, applies the documented resolution, and reconciles that table against Postgres.
+`make evolve` runs DDL against the live pipeline, one statement at a time, on a fresh `make reset && make up && make seed`. Each step records what happened and applies the resolution from [the runbook](docs/runbooks/pipeline-halted.md). It then reconciles that table against Postgres. "Expected" is what I predicted before the first run.
+
+Two steps behaved differently from that prediction, and both are worth knowing:
+- The rename went through both gates. `full_name` is NOT NULL, so the renamed field is required and has no default, and Schema Registry rejected it. Once that subject was relaxed, the controller saw a removed column and halted until the Iceberg rename.
+- The decimal scale change passed Schema Registry, because to Avro both versions are bytes. Only the controller stopped it.
+
+`ADD COLUMN ... DEFAULT 'bronze'` matches Postgres on every old row, because the controller requested an incremental snapshot to backfill them.
 
 <!-- evolution -->
 | DDL | expected | observed | resolution | job restarts | rows match |
 |---|---|---|---|---|---|
-
+| `ALTER TABLE orders ADD COLUMN priority smallint` | applied | applied | - | 1 | yes |
+| `ALTER TABLE customers ADD COLUMN loyalty_tier text NOT NULL DEFAULT 'bronze'` | applied | applied | - | 1 | yes |
+| `ALTER TABLE order_items ALTER COLUMN quantity TYPE bigint` | applied | applied | - | 1 | yes |
+| `ALTER TABLE order_items ALTER COLUMN quantity TYPE integer` | applied | applied | - | 0 | yes |
+| `ALTER TABLE order_items ALTER COLUMN quantity TYPE smallint` | rejected | rejected by schema registry | compatibility NONE for the subject | 1 | yes |
+| `ALTER TABLE customers RENAME COLUMN full_name TO display_name` | halted | rejected by schema registry then halted | compatibility NONE for the subject, then make schema-resolve rename full_name display_name | 1 | yes |
+| `ALTER TABLE products DROP COLUMN description` | halted | halted | make schema-resolve drop description | 1 | yes |
+| `ALTER TABLE payments ALTER COLUMN amount TYPE numeric(12,4)` | halted | halted | left halted: Iceberg cannot change a decimal scale | - | - |
 <!-- /evolution -->
 
 ### Compaction
