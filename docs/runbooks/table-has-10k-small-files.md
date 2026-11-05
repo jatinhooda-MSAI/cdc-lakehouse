@@ -2,7 +2,7 @@
 
 Signal: `lakehouse_files` climbing on the Grafana files panel, `lakehouse_scan_seconds` rising with it.
 
-Every checkpoint, every writer subtask writes at least one data file and one equality-delete file per table that changed. With 30 s checkpoints and two writers, that is about 5,800 files per table per day before compaction. Readers must apply every equality-delete file to every older data file, so reads slow down long before storage becomes a problem.
+Every checkpoint, every writer subtask writes a data file, an equality-delete file and usually a position-delete file for each table that changed. The compaction benchmark measured about 7 files per commit with two writers. At 30 s checkpoints that is roughly 21,000 files per table per day before compaction. Readers must apply every equality-delete file to every older data file, so reads slow down long before storage becomes a problem. In the benchmark, 420 unmaintained commits made queries on `orders` about 15 times slower, and with Trino's default heap sizing they killed the server.
 
 ```
 make trino

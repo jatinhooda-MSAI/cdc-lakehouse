@@ -53,7 +53,7 @@ def stop_with_savepoint():
             get(f"{FLINK}/jobs/{jid}/savepoints/{trigger}")), 300, 2, "savepoint")
         if "failure-cause" not in status.get("operation", {}):
             wait_for(lambda: get(f"{FLINK}/jobs/{jid}")["state"] == "FINISHED", 300, 2, "job stopped")
-            return jid
+            return jid, status["operation"]["location"]
         L.warning("savepoint attempt %d failed: %s", attempt + 1, str(status["operation"]["failure-cause"])[:200])
         time.sleep(10)
     raise RuntimeError("could not stop the job with a savepoint")
@@ -109,14 +109,13 @@ def teardown():
     flag("supervisor-paused", True)
     if os.path.exists(ARGS_FILE):
         os.remove(ARGS_FILE)
-    old = stop_with_savepoint()
+    old, savepoint = stop_with_savepoint()
     try:
         catalog().drop_table((NAMESPACE, "orders_raw"))
     except Exception:
         pass
-    flag("allow-non-restored", True)
+    open(f"{STATE}/allow-non-restored", "a").write(savepoint + "\n")
     restart(old)
-    flag("allow-non-restored", False)
 
 
 def main():
@@ -135,7 +134,7 @@ def main():
         teardown()
     flag("supervisor-paused", True)
     open(ARGS_FILE, "w").write(f"--checkpoint-ms {args.checkpoint_ms}\n")
-    old = stop_with_savepoint()
+    old, _ = stop_with_savepoint()
     make_shadow()
     restart(old)
     ids = [r[0] for r in query("SELECT id FROM orders ORDER BY id DESC LIMIT 2000")]

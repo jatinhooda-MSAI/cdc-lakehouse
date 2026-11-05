@@ -16,7 +16,9 @@ TASK_FAILED = Gauge("cdc_controller_connector_failed", "1 while a connector or t
 JOB_UP = Gauge("cdc_controller_job_running", "1 while the CDC job is RUNNING")
 
 BLOCKED = Gauge("cdc_controller_blocked", "1 while the job cannot be started safely")
-state = {"last_submit": 0.0, "last_change": 0.0, "last_drift": None, "backoff": {}, "seen_job": False, "lost_at": None}
+APPROVED = "/app/.state/allow-non-restored"
+state = {"last_submit": 0.0, "last_change": 0.0, "last_drift": None, "backoff": {}, "seen_job": False, "lost_at": None,
+         "failures": {}}
 
 
 def jobs():
@@ -68,7 +70,8 @@ def submit(restore):
     jar = up.json()["filename"].split("/")[-1]
     body = {"entryClass": "lakehouse.cdc.CdcJob", "programArgsList": job_args()}
     if restore:
-        body.update(savepointPath=restore, allowNonRestoredState=os.path.exists("/app/.state/allow-non-restored"))
+        approved = open(APPROVED).read().split() if os.path.exists(APPROVED) else []
+        body.update(savepointPath=restore, allowNonRestoredState=restore in approved)
     try:
         r = requests.post(f"{FLINK}/jars/{jar}/run", json=body, timeout=300)
         r.raise_for_status()
@@ -140,8 +143,18 @@ def tick(halted, created):
             return mark_halted(f"unresolved {reason}")
         state["last_drift"] = reason
         L.warning("job %s failed: %s", job["jid"], reason or "see Flink UI")
+    if state["failures"].get(restore, 0) >= 3:
+        BLOCKED.set(1)
+        L.error("3 submissions from %s failed; approve dropping state by adding the path to .state/allow-non-restored", restore)
+        state["last_submit"] = time.time() + 60
+        return
     state["last_submit"] = time.time()
-    submit(restore)
+    try:
+        submit(restore)
+        state["failures"].pop(restore, None)
+    except requests.HTTPError:
+        state["failures"][restore] = state["failures"].get(restore, 0) + 1
+        raise
 
 
 def connect_tick():

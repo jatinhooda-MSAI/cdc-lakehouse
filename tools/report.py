@@ -121,10 +121,13 @@ def maintenance_chart():
     fig.tight_layout()
     fig.savefig(f"{RESULTS}/maintenance.png", facecolor=SURFACE)
     first, last = s[0], s[-1]
-    rows = [f"| {k} | {first['raw'].get(k)} | {last['raw'].get(k)} | {last['maintained'].get(k)} |"
-            for k in ("group_by_status", "count", "point_lookup", "data_files", "delete_files", "snapshots")]
+    after = next(p for p in reversed(s) if p["commits"] in data["maintained_at"])
+    rows = [f"| {label} | {first['raw'].get(k)} | {last['raw'].get(k)} | {after['maintained'].get(k)} | {last['maintained'].get(k)} |"
+            for k, label in (("group_by_status", "GROUP BY status, ms"), ("count", "count(*), ms"), ("point_lookup", "point lookup, ms"),
+                             ("data_files", "data files"), ("delete_files", "delete files"))]
     return (f"![query latency and delete files vs commits](results/maintenance.png)\n\n"
-            f"| after {last['commits']} commits | start | never maintained | maintained |\n|---|---|---|---|\n" + "\n".join(rows))
+            f"| | start | never maintained, {last['commits']} commits | maintained, right after the run at {after['commits']} | "
+            f"maintained, {last['commits']} commits |\n|---|---|---|---|---|\n" + "\n".join(rows))
 
 
 def footprint_table():

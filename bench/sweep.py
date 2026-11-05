@@ -15,7 +15,7 @@ L = log("sweep")
 def run_interval(ms, seconds, rate):
     flag("supervisor-paused", True)
     open(ARGS_FILE, "w").write(f"--checkpoint-ms {ms}\n")
-    restart(stop_with_savepoint())
+    restart(stop_with_savepoint()[0])
     time.sleep(60)
     since = int(time.time() * 1000)
     subprocess.run([sys.executable, "-m", "generator.generator", "run", "--rate", str(rate), "--probe",
@@ -43,7 +43,7 @@ def main():
         flag("supervisor-paused", True)
         if os.path.exists(ARGS_FILE):
             os.remove(ARGS_FILE)
-        restart(stop_with_savepoint())
+        restart(stop_with_savepoint()[0])
         flag("maintenance-paused", False)
 
 
