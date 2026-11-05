@@ -1,0 +1,314 @@
+{
+  "checkpoint_ms": 5000,
+  "rate": 200,
+  "minutes": 60,
+  "maintain_every_commits": 120,
+  "maintained_at": [
+    120,
+    240,
+    360
+  ],
+  "rows_per_commit": 681,
+  "series": [
+    {
+      "commits": 0,
+      "elapsed_s": 2,
+      "maintained": {
+        "data_files": 1,
+        "delete_files": 0,
+        "snapshots": 259,
+        "count": 355,
+        "group_by_status": 273,
+        "point_lookup": 261
+      },
+      "raw": {
+        "data_files": 1,
+        "delete_files": 0,
+        "snapshots": 1,
+        "count": 103,
+        "group_by_status": 602,
+        "point_lookup": 280
+      }
+    },
+    {
+      "commits": 30,
+      "elapsed_s": 202,
+      "maintained": {
+        "data_files": 61,
+        "delete_files": 120,
+        "snapshots": 289,
+        "count": 1169,
+        "group_by_status": 575,
+        "point_lookup": 553
+      },
+      "raw": {
+        "data_files": 65,
+        "delete_files": 128,
+        "snapshots": 33,
+        "count": 319,
+        "group_by_status": 982,
+        "point_lookup": 257
+      }
+    },
+    {
+      "commits": 60,
+      "elapsed_s": 401,
+      "maintained": {
+        "data_files": 121,
+        "delete_files": 240,
+        "snapshots": 320,
+        "count": 1751,
+        "group_by_status": 1188,
+        "point_lookup": 781
+      },
+      "raw": {
+        "data_files": 127,
+        "delete_files": 252,
+        "snapshots": 64,
+        "count": 590,
+        "group_by_status": 1241,
+        "point_lookup": 1457
+      }
+    },
+    {
+      "commits": 90,
+      "elapsed_s": 607,
+      "maintained": {
+        "data_files": 181,
+        "delete_files": 360,
+        "snapshots": 350,
+        "count": 2054,
+        "group_by_status": 1462,
+        "point_lookup": 900
+      },
+      "raw": {
+        "data_files": 189,
+        "delete_files": 376,
+        "snapshots": 95,
+        "count": 2333,
+        "group_by_status": 1660,
+        "point_lookup": 1603
+      }
+    },
+    {
+      "commits": 120,
+      "elapsed_s": 845,
+      "maintained": {
+        "data_files": 11,
+        "delete_files": 20,
+        "snapshots": 234,
+        "count": 222,
+        "group_by_status": 286,
+        "point_lookup": 338
+      },
+      "raw": {
+        "data_files": 253,
+        "delete_files": 504,
+        "snapshots": 127,
+        "count": 2220,
+        "group_by_status": 1501,
+        "point_lookup": 1401
+      }
+    },
+    {
+      "commits": 150,
+      "elapsed_s": 1010,
+      "maintained": {
+        "data_files": 61,
+        "delete_files": 120,
+        "snapshots": 259,
+        "count": 303,
+        "group_by_status": 495,
+        "point_lookup": 566
+      },
+      "raw": {
+        "data_files": 303,
+        "delete_files": 604,
+        "snapshots": 152,
+        "count": 2148,
+        "group_by_status": 2005,
+        "point_lookup": 1435
+      }
+    },
+    {
+      "commits": 180,
+      "elapsed_s": 1208,
+      "maintained": {
+        "data_files": 121,
+        "delete_files": 240,
+        "snapshots": 289,
+        "count": 407,
+        "group_by_status": 747,
+        "point_lookup": 327
+      },
+      "raw": {
+        "data_files": 365,
+        "delete_files": 728,
+        "snapshots": 183,
+        "count": 2495,
+        "group_by_status": 2163,
+        "point_lookup": 3278
+      }
+    },
+    {
+      "commits": 210,
+      "elapsed_s": 1399,
+      "maintained": {
+        "data_files": 181,
+        "delete_files": 360,
+        "snapshots": 319,
+        "count": 1255,
+        "group_by_status": 284,
+        "point_lookup": 1029
+      },
+      "raw": {
+        "data_files": 425,
+        "delete_files": 848,
+        "snapshots": 213,
+        "count": 4071,
+        "group_by_status": 3412,
+        "point_lookup": 2154
+      }
+    },
+    {
+      "commits": 240,
+      "elapsed_s": 1626,
+      "maintained": {
+        "data_files": 9,
+        "delete_files": 16,
+        "snapshots": 248,
+        "count": 324,
+        "group_by_status": 514,
+        "point_lookup": 431
+      },
+      "raw": {
+        "data_files": 491,
+        "delete_files": 980,
+        "snapshots": 246,
+        "count": 4258,
+        "group_by_status": 3950,
+        "point_lookup": 3774
+      }
+    },
+    {
+      "commits": 270,
+      "elapsed_s": 1805,
+      "maintained": {
+        "data_files": 61,
+        "delete_files": 120,
+        "snapshots": 274,
+        "count": 903,
+        "group_by_status": 513,
+        "point_lookup": 785
+      },
+      "raw": {
+        "data_files": 545,
+        "delete_files": 1088,
+        "snapshots": 273,
+        "count": 5035,
+        "group_by_status": 6056,
+        "point_lookup": 4278
+      }
+    },
+    {
+      "commits": 300,
+      "elapsed_s": 2013,
+      "maintained": {
+        "data_files": 121,
+        "delete_files": 240,
+        "snapshots": 304,
+        "count": 476,
+        "group_by_status": 1364,
+        "point_lookup": 474
+      },
+      "raw": {
+        "data_files": 605,
+        "delete_files": 1208,
+        "snapshots": 303,
+        "count": 5769,
+        "group_by_status": 5938,
+        "point_lookup": 5083
+      }
+    },
+    {
+      "commits": 330,
+      "elapsed_s": 2215,
+      "maintained": {
+        "data_files": 181,
+        "delete_files": 360,
+        "snapshots": 334,
+        "count": 1326,
+        "group_by_status": 918,
+        "point_lookup": 1513
+      },
+      "raw": {
+        "data_files": 667,
+        "delete_files": 1332,
+        "snapshots": 334,
+        "count": 8979,
+        "group_by_status": 5971,
+        "point_lookup": 6350
+      }
+    },
+    {
+      "commits": 360,
+      "elapsed_s": 2460,
+      "maintained": {
+        "data_files": 9,
+        "delete_files": 16,
+        "snapshots": 275,
+        "count": 174,
+        "group_by_status": 612,
+        "point_lookup": 499
+      },
+      "raw": {
+        "data_files": 731,
+        "delete_files": 1460,
+        "snapshots": 366,
+        "count": 10284,
+        "group_by_status": 8438,
+        "point_lookup": 7069
+      }
+    },
+    {
+      "commits": 390,
+      "elapsed_s": 3245,
+      "maintained": {
+        "data_files": 253,
+        "delete_files": 504,
+        "snapshots": 397,
+        "count": 1683,
+        "group_by_status": 1177,
+        "point_lookup": 558
+      },
+      "raw": {
+        "data_files": 977,
+        "delete_files": 1952,
+        "snapshots": 490,
+        "count": 12674,
+        "group_by_status": 9476,
+        "point_lookup": 7930
+      }
+    },
+    {
+      "commits": 420,
+      "elapsed_s": 3443,
+      "maintained": {
+        "data_files": 311,
+        "delete_files": 620,
+        "snapshots": 426,
+        "count": 2849,
+        "group_by_status": 1928,
+        "point_lookup": 2280
+      },
+      "raw": {
+        "data_files": 1041,
+        "delete_files": 2080,
+        "snapshots": 521,
+        "count": 9255,
+        "group_by_status": 9712,
+        "point_lookup": 9465
+      }
+    }
+  ]
+}
