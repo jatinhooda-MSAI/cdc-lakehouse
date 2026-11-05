@@ -55,7 +55,7 @@ Evidence collected on every run (`chaos/reconcile.py`):
 
 The Postgres connector has no schema-change topic. DDL becomes visible only as a new Avro schema on the next row of that table. There are two gates.
 
-Gate 1 is Schema Registry in BACKWARD mode. It rejects narrowing (bigint to int) and cross-family changes (text to int). Debezium then fails, nothing reaches Kafka, and the slot-lag alert fires. `errors.tolerance=none` is what makes this a stop rather than a silent skip.
+Gate 1 is Schema Registry in BACKWARD mode. It rejects narrowing and cross-family changes (text to int) against the latest version. Debezium then fails, nothing reaches Kafka, and the slot-lag alert fires. `errors.tolerance=none` is what makes this a stop rather than a silent skip. The gate only fires for schemas the subject has never registered. Narrowing a column back to an earlier type re-sends an old schema, and the registry returns its id without checking. The second gate has to be correct on its own.
 
 Gate 2 is the controller, which reads the Schema Registry version history. The job accepts only writer schema ids that the controller has mapped to Iceberg field ids (table property `cdc.schema-map`). An unknown id fails the job with a non-recoverable error. The controller applies the change, then resubmits from the last checkpoint, so a checkpoint never mixes two schemas. A repeat failure on the same id halts.
 
@@ -64,7 +64,8 @@ Gate 2 is the controller, which reads the Schema Registry version history. The j
 | ADD COLUMN, nullable | Iceberg column added, job restarted, old rows NULL (same as Postgres) |
 | ADD COLUMN ... DEFAULT x | added, then an incremental snapshot backfills existing rows (Postgres 11+ fast defaults emit no row events) |
 | int to bigint, numeric(p,s) to numeric(p+n,s) | Iceberg type promoted, restart |
-| bigint to int | rejected by Schema Registry, pipeline stops; if intended, relax compatibility for that subject (the sink upcasts) |
+| bigint to smallint (a schema the subject has never had) | rejected by Schema Registry, pipeline stops; if intended, relax compatibility for that subject (the sink upcasts) |
+| bigint back to int (the schema of an earlier version) | not checked at all: Schema Registry hands back the existing version id, and the sink writes the ints into the widened column |
 | RENAME COLUMN | halts: in pgoutput a rename is a drop plus an add. `make schema-resolve` renames the Iceberg column, which keeps the field id and history |
 | DROP COLUMN | halts. Resolve with `drop` (metadata-only Iceberg drop, history stays in time travel) or `keep` (column stays, updated rows get NULL) |
 | numeric scale change | halts: Iceberg cannot represent it |

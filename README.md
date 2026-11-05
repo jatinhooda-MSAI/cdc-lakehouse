@@ -21,7 +21,7 @@ controller: creates and evolves tables from Schema Registry, resubmits the job f
 
 ## Running it
 
-Needs Docker with about 8 GB for the VM. Everything else builds in containers.
+Needs Docker with about 8 GB of memory for the VM and about 12 GB of disk for images. Everything else builds in containers, so there is no local Java or Python setup.
 
 ```
 make up          # build the Flink job and images, start the stack, wait until healthy
@@ -96,7 +96,7 @@ Read cost follows the delete-file count, not the row count. Each commit added ab
 
 ### Footprint
 
-Peak memory per container, sampled every minute during `make chaos`.
+Peak memory per container, sampled every minute during `make chaos`. Trino ran at its limit. After this run it got 1.5 GB with a fixed 896 MB heap (see the notes).
 
 <!-- footprint -->
 | container | peak during chaos | limit |
@@ -154,6 +154,13 @@ Iceberg REST catalog on Postgres. The reference fixture stores its catalog in SQ
 - Trino's host port is 18080, because 8080 was taken on this laptop.
 - The first compaction benchmarks kept losing Trino. It died with no Java error, three times, while scanning tables full of equality deletes. The image sizes the heap at 80% of the container, which left too little room for native memory inside a VM that was already near full. A fixed 896 MB heap, G1 and 4 worker threads fixed it; the rerun had no restarts. The benchmark also records a failed query as a data point instead of crashing.
 - `make seed` failed in the first clean run. Its reconcile started before the controller had created the tables, and it treated "table not found" as fatal instead of "not yet".
+- The first schema-suite run hung, and it took three things to cause it:
+  1. The benchmark teardown had restored the job from a savepoint that still held state for the dropped benchmark sink. A one-shot flag permitted dropping that state.
+  2. The DDL failed the job before its first checkpoint, so that savepoint was still the newest restore point.
+  3. The controller kept resubmitting from it without the flag, and Flink kept refusing.
+
+  Permission to drop state is now tied to the savepoint path. Three failed submissions from the same restore point stop the controller and alert instead of looping.
+- I expected Schema Registry to reject `bigint` back to `int`, and it never checked. The narrowed column produced exactly the schema of version 1, so the registry returned that version's id without running a compatibility check. The sink handled it, writing ints into the widened column. The registry gate only covers schemas a subject has never had, so the suite now narrows to `smallint` for that case.
 
 ## What I'd do differently
 

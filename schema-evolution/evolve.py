@@ -25,8 +25,12 @@ STEPS = [
      "ddl": "ALTER TABLE order_items ALTER COLUMN quantity TYPE bigint",
      "dml": "UPDATE order_items SET quantity = quantity + 1 WHERE id IN (SELECT id FROM order_items ORDER BY id DESC LIMIT 20)",
      "check": lambda s: s.get("quantity") == "long"},
-    {"name": "narrow bigint to int", "table": "order_items", "expect": "rejected",
+    {"name": "narrow back to int", "table": "order_items", "expect": "applied",
      "ddl": "ALTER TABLE order_items ALTER COLUMN quantity TYPE integer",
+     "dml": "UPDATE order_items SET quantity = quantity + 1 WHERE id IN (SELECT id FROM order_items ORDER BY id DESC LIMIT 20)",
+     "check": lambda s: s.get("quantity") == "long"},
+    {"name": "narrow to smallint", "table": "order_items", "expect": "rejected",
+     "ddl": "ALTER TABLE order_items ALTER COLUMN quantity TYPE smallint",
      "dml": "UPDATE order_items SET quantity = quantity + 1 WHERE id IN (SELECT id FROM order_items ORDER BY id DESC LIMIT 20)",
      "check": lambda s: s.get("quantity") == "long"},
     {"name": "rename column", "table": "customers", "expect": "halted", "resolve": ["rename", "full_name", "display_name"],
@@ -70,6 +74,12 @@ def converged(table, timeout=600):
     return wait_for(ok, timeout, 10, f"{table} reconciled")
 
 
+def relax(table):
+    requests.put(f"{SR}/config/{TOPIC_PREFIX}{table}-value", json={"compatibility": "NONE"}, timeout=10).raise_for_status()
+    requests.post(f"{CONNECT}/connectors/{CONNECTOR}/restart", params={"includeTasks": "true", "onlyFailed": "true"}, timeout=30)
+    wait_for(lambda: task_failure() is None, 120, 5, "connector running")
+
+
 def run_step(step):
     L.info("--- %s: %s", step["name"], step["ddl"])
     t0 = time.time()
@@ -77,32 +87,38 @@ def run_step(step):
     with pg(admin=True) as c:
         c.execute(step["ddl"])
         c.execute(step["dml"])
-    result = {"step": step["name"], "ddl": step["ddl"], "expected": step["expect"]}
     table = step["table"]
-    if step["expect"] == "rejected":
-        trace = wait_for(task_failure, 300, 5, "connector failure")
-        result["observed"] = "rejected by schema registry" if "incompatible" in trace.lower() else "connector failed"
-        result["reason"] = next((line.strip() for line in trace.splitlines() if "ncompatible" in line), trace.splitlines()[0])[:240]
-        requests.put(f"{SR}/config/{TOPIC_PREFIX}{table}-value", json={"compatibility": "NONE"}, timeout=10).raise_for_status()
-        requests.post(f"{CONNECT}/connectors/{CONNECTOR}/restart", params={"includeTasks": "true", "onlyFailed": "true"}, timeout=30)
-        result["resolution"] = "compatibility NONE for this subject; the sink upcasts int into the long column"
-    elif step["expect"] == "halted":
-        reason = wait_for(lambda: halted(table) or task_failure(), 300, 5, "halt")
-        result["observed"] = "halted" if halted(table) else "rejected by schema registry"
-        result["reason"] = reason.splitlines()[0][:240]
-        if "resolve" not in step:
-            result["seconds"] = round(time.time() - t0, 1)
-            result["final"] = "left halted: Iceberg cannot change a decimal scale; the table needs a rebuild"
-            return result
-        resolve.main([table] + step["resolve"])
-        result["resolution"] = "make schema-resolve " + " ".join([table] + step["resolve"])
-    else:
-        result["observed"] = "applied"
-    state = converged(table)
-    columns = iceberg_columns(table)
-    result.update(columns_ok=step["check"](columns), reconcile=state, job_restarts=int(submissions() - before),
-                  seconds=round(time.time() - t0, 1))
-    result["ok"] = result["columns_ok"] and state["ok"]
+    result = {"step": step["name"], "ddl": step["ddl"], "expected": step["expect"], "observed": [], "resolution": []}
+    deadline = time.time() + 600
+    state = {"ok": False}
+    while time.time() < deadline:
+        trace = task_failure()
+        if trace:
+            result["observed"].append("rejected by schema registry")
+            result["reason"] = next((x.strip() for x in trace.splitlines() if "ncompatible" in x), trace.splitlines()[0])[:240]
+            relax(table)
+            result["resolution"].append("compatibility NONE for the subject")
+            continue
+        reason = halted(table)
+        if reason:
+            result["observed"].append("halted")
+            result["reason"] = reason.splitlines()[0][:240]
+            if "resolve" not in step:
+                result.update(observed=" then ".join(result["observed"]), resolution="-", seconds=round(time.time() - t0, 1),
+                              final="left halted: Iceberg cannot change a decimal scale", ok=step["expect"] == "halted")
+                return result
+            resolve.main([table] + step["resolve"])
+            result["resolution"].append("make schema-resolve " + " ".join(step["resolve"]))
+            continue
+        state = reconcile.state(table) if step["check"](iceberg_columns(table)) else {"ok": False}
+        if state["ok"]:
+            break
+        time.sleep(5)
+    result["observed"] = " then ".join(result["observed"]) or "applied"
+    result["resolution"] = ", then ".join(result["resolution"]) or "-"
+    result.update(reconcile=state, job_restarts=int(submissions() - before), seconds=round(time.time() - t0, 1),
+                  schema_versions=len(requests.get(f"{SR}/subjects/{TOPIC_PREFIX}{table}-value/versions", timeout=10).json()))
+    result["ok"] = state["ok"]
     L.info("--- %s: %s in %.0fs", step["name"], result["observed"], result["seconds"])
     return result
 
@@ -110,7 +126,7 @@ def run_step(step):
 def main():
     results = [run_step(s) for s in STEPS]
     for r in results:
-        print(f"{r['step']:<24} expected={r['expected']:<9} observed={r['observed']:<28} restarts={r.get('job_restarts', '-')} "
+        print(f"{r['step']:<24} expected={r['expected']:<9} observed={r['observed']:<44} restarts={r.get('job_restarts', '-')} "
               f"rows_ok={r.get('reconcile', {}).get('ok', '-')} {r['seconds']}s")
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(results, open(OUT, "w"), indent=2, default=str)

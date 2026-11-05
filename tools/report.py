@@ -85,7 +85,8 @@ def evolution_table():
     data = load(f"{RESULTS}/evolution.json") or []
     rows = []
     for d in data:
-        rows.append(f"| `{d['ddl']}` | {d['expected']} | {d['observed']} | {d.get('resolution', d.get('final', '-'))} | "
+        fix = d.get("final") if d.get("resolution", "-") == "-" and d.get("final") else d.get("resolution", "-")
+        rows.append(f"| `{d['ddl']}` | {d['expected']} | {d['observed']} | {fix} | "
                     f"{d.get('job_restarts', '-')} | {'yes' if d.get('reconcile', {}).get('ok') else '-'} |")
     return "| DDL | expected | observed | resolution | job restarts | rows match |\n|---|---|---|---|---|---|\n" + "\n".join(rows)
 
