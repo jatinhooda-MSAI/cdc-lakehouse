@@ -163,10 +163,7 @@ Iceberg REST catalog on Postgres. The reference fixture stores its catalog in SQ
 - The first job submission failed with "Equality field columns shouldn't be empty". The append-only changelog table had inherited `write.upsert.enabled=true` from the shared table properties, and FlinkSink reads that property.
 - Jobs submitted through Flink's REST API ran at parallelism 1, although `parallelism.default` was 2 in the cluster config. The job now sets it.
 - In the first chaos run, "kill the TaskManager during a checkpoint" mostly landed after the checkpoint had already completed (they take under a second). The harness now kills at the predicted trigger time and records the checkpoint's final status, so the table shows whether the fault landed.
-- The first chaos run also died on a unique-email violation. Generator emails were derived from the seed, so a second run with the same seed collided with the first.
-- Trino's host port is 18080, because 8080 was taken on this laptop.
 - The first compaction benchmarks kept losing Trino. It died with no Java error, three times, while scanning tables full of equality deletes. The image sizes the heap at 80% of the container, which left too little room for native memory inside a VM that was already near full. A fixed 896 MB heap, G1 and 4 worker threads fixed it; the rerun had no restarts. The benchmark also records a failed query as a data point instead of crashing.
-- `make seed` failed in the first clean run. Its reconcile started before the controller had created the tables, and it treated "table not found" as fatal instead of "not yet".
 - The first schema-suite run hung, and it took three things to cause it:
   1. The benchmark teardown had restored the job from a savepoint that still held state for the dropped benchmark sink. A one-shot flag permitted dropping that state.
   2. The DDL failed the job before its first checkpoint, so that savepoint was still the newest restore point.
