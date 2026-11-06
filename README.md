@@ -4,7 +4,7 @@
 
 Streams insert, update and delete ops from a Postgres database into Apache Iceberg tables that Trino can query within about 30 seconds. While copying is cheap, the project is about keeping the copy true-to-source while parts of the pipeline crash, so there is a chaos suite that kills components while the pipeline runs and then compares Iceberg rows with Postgres rows.
 
-- A total og 12 injected faults across 9 scenarios with no wrong rows afterwards. (A replay with the ordering guard 'off' gave 994 wrong rows.)
+- A total of 12 injected faults across 9 scenarios with no wrong rows afterwards. (A replay with the ordering guard 'off' gave 994 wrong rows.)
 - 95% of postgres rows land within 30.4 s from Postgres commit. Query-able in Trino at 30 s checkpoints, capture takes half a second (the rest is waiting for the next checkpoint).
 - Everything run on docker.
 
