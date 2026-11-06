@@ -1,11 +1,50 @@
 # cdc-lakehouse
 
-Postgres replicated into Apache Iceberg through Debezium, Kafka and Flink, queried with Trino, all in docker-compose. One Flink job writes every table as upserts with equality deletes. A per-key ordering guard keeps replayed or re-sent events from rolling a row back. The chaos suite kills each component under load and then compares every Iceberg table with Postgres row by row.
+## TL;DR
 
-Results:
-- 12 injected faults across 9 scenarios ended with 0 differing rows. No order's version went backwards in any `orders` snapshot taken during the runs.
-- Running the same replay with the guard switched off left 994 wrong rows.
-- With 30 s checkpoints, p95 from Postgres commit to queryable in Trino is 30.4 s.
+Streams insert, update and delete ops from a Postgres database into Apache Iceberg tables that Trino can query within about 30 seconds. While copying is cheap, the project is about keeping the copy true-to-source while parts of the pipeline crash, so there is a chaos suite that kills components while the pipeline runs and then compares Iceberg rows with Postgres rows.
+
+- A total og 12 injected faults across 9 scenarios with no wrong rows afterwards. (A replay with the ordering guard 'off' gave 994 wrong rows.)
+- 95% of postgres rows land within 30.4 s from Postgres commit. Query-able in Trino at 30 s checkpoints, capture takes half a second (the rest is waiting for the next checkpoint).
+- Everything run on docker.
+
+| Component | What is its use in the setup |
+|---|---|
+| Postgres 16 | the source; changes are read from its WAL log through a replication slot |
+| Debezium 3.7 on Kafka Connect | turns each committed row change into an event |
+| Kafka 4.2 + Schema Registry | keeps the events in order per row and replayable, with Avro schemas checked for compatibility |
+| Flink 1.20 job (Java) | decodes events, drops stale or duplicate ones, upserts into Iceberg in one commit per checkpoint |
+| Iceberg 1.12 on S3 (MinIO) | the analytics tables, with snapshots and time travel |
+| Trino 484 | SQL over the tables, and the compaction jobs |
+| Controller in Python | creates and evolves tables from Schema Registry, stops on unsafe changes, restarts the job and failed connector tasks |
+| Prometheus + Grafana | Dashboard, Alerts, and Runbooks |
+
+The Flink job, controller, chaos suite, and the benchmarks were written; and the rest is configuration.
+
+| Adversarial event | What the pipeline does | Test|
+|---|---|---|
+| Flink worker crashes | restarts from its last checkpoint, no loss or something written twice | 5 kill actions wtih 2 of them between a checkpoint and its Iceberg commit |
+| Flink JobManager dies | the controller waits out the old job, then resubmits from the newest checkpoint in S3 | resumed from checkpoint 33 |
+| Debezium is killed | resumes from its last saved offset; the guard drops what it re-sends | 360 events re-sent with no wrong rows |
+| Kafka or S3 goes down | everything retries and waits and the controller restarts failed connector tasks with backoff | Kafka was down 60s, S3 was paused 150 s |
+| Old events get replayed | the guard drops anything not newer than what that row already has | 2100 replayed and the same were dropped |
+| Message with an invalid Avro key lands on a topic | gets parked in a dead letter topic, the alert fires, and the pipeline keeps going | 1 record in the DLQ |
+| A table or column is added, or a type enlarged | the controller changes the Iceberg table and restarts the job and the new defaults get backfilled | 3 DDL steps abd the rows match |
+| Small files pile up | hourly compaction, snapshot expiry and orphan cleanup | 9.7 s queries when unmaintained, 0.6 s after compaction |
+
+The test harness restarts each killed container after 3 to 60 s, standing in for an orchestrator. From there, recovery takes no human step.
+
+Some things stop the pipeline on purpose:
+- Column renames and drops stop the pipeline with an alert for a human to take action on.
+- Non decoded row changes (skipping it would lose data).
+- TRUNCATE statements.
+- A primary key type change or a decimal scale change.
+
+While stopeed, events wait in Kafka. If Debezium stays down, Postgres keeps the WAL it needs, with an alert at 1 GB and a 4 GB cap so the source can't fill its disk; past the cap the tables need a rebuild.
+
+
+
+## Architecture
 
 ```
 Postgres 16 ──pgoutput──> Debezium 3.7 (Kafka Connect) ──Avro──> Kafka 4.2 + Schema Registry
