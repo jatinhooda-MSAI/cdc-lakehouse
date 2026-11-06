@@ -4,12 +4,14 @@
 
 Streams insert, update and delete ops from a Postgres database into Apache Iceberg tables that Trino can query within about 30 seconds. While copying is cheap, the project is about keeping the copy true-to-source while parts of the pipeline crash, so there is a chaos suite that kills components while the pipeline runs and then compares Iceberg rows with Postgres rows.
 
-- A total of *12 injected faults across 9 scenarios with no wrong rows afterwards.* (A replay with the guard 'off' gave 994 wrong rows.)
-- 95% of postgres rows land within 30.4 s from Postgres commit. Query-able in Trino at 30 s checkpoints, capture takes half a second (the rest is waiting for the next checkpoint).
+- A total of **12 injected faults across 9 scenarios with no wrong rows afterwards.** (A replay with the guard 'off' gave 994 wrong rows.)
+- **95% of postgres rows land within 30.4 s from Postgres commit.** Query-able in Trino at 30 s checkpoints, capture takes half a second (the rest is waiting for the next checkpoint).
 - Everything run on docker.
 
+<div style="overflow-x: auto; white-space: nowrap;">
+  
 | Component | What is its use in the setup |
-|---|---|
+|:---|:---|
 | Postgres 16 | the source; changes are read from its WAL log through a replication slot |
 | Debezium 3.7 on Kafka Connect | turns each committed row change into an event |
 | Kafka 4.2 + Schema Registry | keeps the events in order per row and replayable, with Avro schemas checked for compatibility |
@@ -19,10 +21,14 @@ Streams insert, update and delete ops from a Postgres database into Apache Icebe
 | Controller in Python | creates and evolves tables from Schema Registry, stops on unsafe changes, restarts the job and failed connector tasks |
 | Prometheus + Grafana | Dashboard, Alerts, and Runbooks |
 
+</div>
+
 The Flink job, controller, chaos suite, and the benchmarks were written; and the rest is configuration.
 
+<div style="overflow-x: auto; white-space: nowrap;">
+ 
 | Adversarial event | What the pipeline does | Test|
-|---|---|---|
+|:---|:---|:---|
 | Flink worker crashes | restarts from its last checkpoint, no loss or something written twice | 5 kill actions wtih 2 of them between a checkpoint and its Iceberg commit |
 | Flink JobManager dies | the controller waits out the old job, then resubmits from the newest checkpoint in S3 | resumed from checkpoint 33 |
 | Debezium is killed | resumes from its last saved offset; the guard drops what it re-sends | 360 events re-sent with no wrong rows |
@@ -31,6 +37,8 @@ The Flink job, controller, chaos suite, and the benchmarks were written; and the
 | Message with an invalid Avro key lands on a topic | gets parked in a dead letter topic, the alert fires, and the pipeline keeps going | 1 record in the DLQ |
 | A table or column is added, or a type enlarged | the controller changes the Iceberg table and restarts the job and the new defaults get backfilled | 3 DDL steps abd the rows match |
 | Small files pile up | hourly compaction, snapshot expiry and orphan cleanup | 9.7 s queries when unmaintained, 0.6 s after compaction |
+
+</div>
 
 The test harness restarts each killed container after 3 to 60 s, standing in for an orchestrator. From there, recovery takes no human step.
 
