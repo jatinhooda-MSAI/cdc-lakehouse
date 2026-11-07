@@ -8,37 +8,29 @@ Streams insert, update and delete ops from a Postgres database into Apache Icebe
 - **95% of postgres rows land within 30.4 s from Postgres commit.** Query-able in Trino at 30 s checkpoints, capture takes half a second (the rest is waiting for the next checkpoint).
 - Everything run on docker.
 
-<div style="overflow-x: auto; white-space: nowrap;">
-  
-| Component | What is its use in the setup |
+| Component | What&nbsp;is&nbsp;its&nbsp;use&nbsp;in&nbsp;the&nbsp;setup |
 |:---|:---|
-| Postgres 16 | the source; changes are read from its WAL log through a replication slot |
-| Debezium 3.7 on Kafka Connect | turns each committed row change into an event |
-| Kafka 4.2 + Schema Registry | keeps the events in order per row and replayable, with Avro schemas checked for compatibility |
-| Flink 1.20 job (Java) | decodes events, drops stale or duplicate ones, upserts into Iceberg in one commit per checkpoint |
-| Iceberg 1.12 on S3 (MinIO) | the analytics tables, with snapshots and time travel |
-| Trino 484 | SQL over the tables, and the compaction jobs |
-| Controller in Python | creates and evolves tables from Schema Registry, stops on unsafe changes, restarts the job and failed connector tasks |
-| Prometheus + Grafana | Dashboard, Alerts, and Runbooks |
-
-</div>
+| Postgres&nbsp;16 | the&nbsp;source;&nbsp;changes&nbsp;are&nbsp;read&nbsp;from&nbsp;its&nbsp;WAL&nbsp;log&nbsp;through&nbsp;a&nbsp;replication&nbsp;slot |
+| Debezium&nbsp;3.7&nbsp;on&nbsp;Kafka&nbsp;Connect | turns&nbsp;each&nbsp;committed&nbsp;row&nbsp;change&nbsp;into&nbsp;an&nbsp;event |
+| Kafka&nbsp;4.2&nbsp;+&nbsp;Schema&nbsp;Registry | keeps&nbsp;the&nbsp;events&nbsp;in&nbsp;order&nbsp;per&nbsp;row&nbsp;and&nbsp;replayable,&nbsp;with&nbsp;Avro&nbsp;schemas&nbsp;checked&nbsp;for&nbsp;compatibility |
+| Flink&nbsp;1.20&nbsp;job&nbsp;(Java) | decodes&nbsp;events,&nbsp;drops&nbsp;stale&nbsp;or&nbsp;duplicate&nbsp;ones,&nbsp;upserts&nbsp;into&nbsp;Iceberg&nbsp;in&nbsp;one&nbsp;commit&nbsp;per&nbsp;checkpoint |
+| Iceberg&nbsp;1.12&nbsp;on&nbsp;S3&nbsp;(MinIO) | the&nbsp;analytics&nbsp;tables,&nbsp;with&nbsp;snapshots&nbsp;and&nbsp;time&nbsp;travel |
+| Trino&nbsp;484 | SQL&nbsp;over&nbsp;the&nbsp;tables,&nbsp;and&nbsp;the&nbsp;compaction&nbsp;jobs |
+| Controller&nbsp;in&nbsp;Python | creates&nbsp;and&nbsp;evolves&nbsp;tables&nbsp;from&nbsp;Schema&nbsp;Registry,&nbsp;stops&nbsp;on&nbsp;unsafe&nbsp;changes,&nbsp;restarts&nbsp;the&nbsp;job&nbsp;and&nbsp;failed&nbsp;connector&nbsp;tasks |
+| Prometheus&nbsp;+&nbsp;Grafana | Dashboard,&nbsp;Alerts,&nbsp;and&nbsp;Runbooks |
 
 The Flink job, controller, chaos suite, and the benchmarks were written; and the rest is configuration.
 
-<div style="overflow-x: auto; white-space: nowrap;">
- 
-| Adversarial event | What the pipeline does | Test|
+| Adversarial&nbsp;event | What&nbsp;the&nbsp;pipeline&nbsp;does | Test |
 |:---|:---|:---|
-| Flink worker crashes | restarts from its last checkpoint, no loss or something written twice | 5 kill actions wtih 2 of them between a checkpoint and its Iceberg commit |
-| Flink JobManager dies | the controller waits out the old job, then resubmits from the newest checkpoint in S3 | resumed from checkpoint 33 |
-| Debezium is killed | resumes from its last saved offset; the guard drops what it re-sends | 360 events re-sent with no wrong rows |
-| Kafka or S3 goes down | everything retries and waits and the controller restarts failed connector tasks with backoff | Kafka was down 60s, S3 was paused 150 s |
-| Old events get replayed | the guard drops anything not newer than what that row already has | 2100 replayed and the same were dropped |
-| Message with an invalid Avro key lands on a topic | gets parked in a dead letter topic, the alert fires, and the pipeline keeps going | 1 record in the DLQ |
-| A table or column is added, or a type enlarged | the controller changes the Iceberg table and restarts the job and the new defaults get backfilled | 3 DDL steps abd the rows match |
-| Small files pile up | hourly compaction, snapshot expiry and orphan cleanup | 9.7 s queries when unmaintained, 0.6 s after compaction |
-
-</div>
+| Flink&nbsp;worker&nbsp;crashes | restarts&nbsp;from&nbsp;its&nbsp;last&nbsp;checkpoint,&nbsp;no&nbsp;loss&nbsp;or&nbsp;something&nbsp;written&nbsp;twice | 5&nbsp;kill&nbsp;actions&nbsp;wtih&nbsp;2&nbsp;of&nbsp;them&nbsp;between&nbsp;a&nbsp;checkpoint&nbsp;and&nbsp;its&nbsp;Iceberg&nbsp;commit |
+| Flink&nbsp;JobManager&nbsp;dies | the&nbsp;controller&nbsp;waits&nbsp;out&nbsp;the&nbsp;old&nbsp;job,&nbsp;then&nbsp;resubmits&nbsp;from&nbsp;the&nbsp;newest&nbsp;checkpoint&nbsp;in&nbsp;S3 | resumed&nbsp;from&nbsp;checkpoint&nbsp;33 |
+| Debezium&nbsp;is&nbsp;killed | resumes&nbsp;from&nbsp;its&nbsp;last&nbsp;saved&nbsp;offset;&nbsp;the&nbsp;guard&nbsp;drops&nbsp;what&nbsp;it&nbsp;re-sends | 360&nbsp;events&nbsp;re-sent&nbsp;with&nbsp;no&nbsp;wrong&nbsp;rows |
+| Kafka&nbsp;or&nbsp;S3&nbsp;goes&nbsp;down | everything&nbsp;retries&nbsp;and&nbsp;waits&nbsp;and&nbsp;the&nbsp;controller&nbsp;restarts&nbsp;failed&nbsp;connector&nbsp;tasks&nbsp;with&nbsp;backoff | Kafka&nbsp;was&nbsp;down&nbsp;60s,&nbsp;S3&nbsp;was&nbsp;paused&nbsp;150&nbsp;s |
+| Old&nbsp;events&nbsp;get&nbsp;replayed | the&nbsp;guard&nbsp;drops&nbsp;anything&nbsp;not&nbsp;newer&nbsp;than&nbsp;what&nbsp;that&nbsp;row&nbsp;already&nbsp;has | 2100&nbsp;replayed&nbsp;and&nbsp;the&nbsp;same&nbsp;were&nbsp;dropped |
+| Message&nbsp;with&nbsp;an&nbsp;invalid&nbsp;Avro&nbsp;key&nbsp;lands&nbsp;on&nbsp;a&nbsp;topic | gets&nbsp;parked&nbsp;in&nbsp;a&nbsp;dead&nbsp;letter&nbsp;topic,&nbsp;the&nbsp;alert&nbsp;fires,&nbsp;and&nbsp;the&nbsp;pipeline&nbsp;keeps&nbsp;going | 1&nbsp;record&nbsp;in&nbsp;the&nbsp;DLQ |
+| A&nbsp;table&nbsp;or&nbsp;column&nbsp;is&nbsp;added,&nbsp;or&nbsp;a&nbsp;type&nbsp;enlarged | the&nbsp;controller&nbsp;changes&nbsp;the&nbsp;Iceberg&nbsp;table&nbsp;and&nbsp;restarts&nbsp;the&nbsp;job&nbsp;and&nbsp;the&nbsp;new&nbsp;defaults&nbsp;get&nbsp;backfilled | 3&nbsp;DDL&nbsp;steps&nbsp;abd&nbsp;the&nbsp;rows&nbsp;match |
+| Small&nbsp;files&nbsp;pile&nbsp;up | hourly&nbsp;compaction,&nbsp;snapshot&nbsp;expiry&nbsp;and&nbsp;orphan&nbsp;cleanup | 9.7&nbsp;s&nbsp;queries&nbsp;when&nbsp;unmaintained,&nbsp;0.6&nbsp;s&nbsp;after&nbsp;compaction |
 
 The test harness restarts each killed container after 3 to 60 s, standing in for an orchestrator. From there, recovery takes no human step.
 
